@@ -42,6 +42,7 @@ from config import (
     GLOBAL_LOG_LEVEL,
     SRC_LOG_LEVELS,
     WEBHOOK_URL,
+    IS_LOCAL,
 )
 from constants import ERROR_MESSAGES
 
@@ -172,6 +173,7 @@ async def get_app_config():
         "default_models": webui_app.state.DEFAULT_MODELS,
         "default_prompt_suggestions": webui_app.state.DEFAULT_PROMPT_SUGGESTIONS,
         "trusted_header_auth": bool(webui_app.state.AUTH_TRUSTED_EMAIL_HEADER),
+        "is_local": IS_LOCAL,
     }
 
 
