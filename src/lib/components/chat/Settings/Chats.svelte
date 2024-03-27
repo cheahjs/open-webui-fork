@@ -2,7 +2,7 @@
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { chats, user } from '$lib/stores';
+	import { chats, user, config } from '$lib/stores';
 
 	import {
 		createNewChat,
@@ -301,7 +301,7 @@
 			</button>
 		{/if}
 
-		{#if $user?.role === 'admin'}
+		{#if $user?.role === 'admin' && ($config?.all_chat_export_allowed ?? true)}
 			<hr class=" dark:border-gray-700" />
 
 			<button
