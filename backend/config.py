@@ -306,6 +306,7 @@ OPENAI_API_BASE_URLS = [
 
 ENABLE_SIGNUP = os.environ.get("ENABLE_SIGNUP", "True").lower() == "true"
 DEFAULT_MODELS = os.environ.get("DEFAULT_MODELS", None)
+IS_LOCAL = os.environ.get("IS_LOCAL", True).lower() == "true"
 
 
 DEFAULT_PROMPT_SUGGESTIONS = (

@@ -105,7 +105,7 @@
 						{$WEBUI_NAME}
 					</div>
 
-					{#if mode === 'signup'}
+					{#if mode === 'signup' && ($config?.is_local ?? true)}
 						<div class=" mt-1 text-xs font-medium text-gray-500">
 							ⓘ {$WEBUI_NAME}
 							{$i18n.t(
