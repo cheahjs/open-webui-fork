@@ -5,7 +5,7 @@
 	const { saveAs } = fileSaver;
 
 	import { getChatById } from '$lib/apis/chats';
-	import { WEBUI_NAME, chatId, modelfiles, settings } from '$lib/stores';
+	import { WEBUI_NAME, chatId, modelfiles, settings, config } from '$lib/stores';
 	import ShareChatModal from '../chat/ShareChatModal.svelte';
 	import TagInput from '../common/Tags/TagInput.svelte';
 	import Tags from '../common/Tags.svelte';
@@ -26,6 +26,9 @@
 	let showTagInput = false;
 
 	const shareChat = async () => {
+		if (!($config?.enable_sharing ?? true)) {
+			return;
+		}
 		const chat = (await getChatById(localStorage.token, $chatId)).chat;
 		console.log('share', chat);
 
