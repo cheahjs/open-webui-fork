@@ -7,6 +7,7 @@
 
 	export let downloadChat: Function;
 	export let shareChat: Function;
+	export let shareLocalChat: Function;
 
 	export let show = false;
 </script>
@@ -25,6 +26,17 @@
 				{$i18n.t('Share to OpenWebUI Community')}
 			</button>
 		{/if}
+
+		<button
+			class=" self-center px-8 py-1.5 w-full rounded-full text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white mt-1.5"
+			type="button"
+			on:click={() => {
+				shareLocalChat();
+				show = false;
+			}}
+		>
+			{$i18n.t('Create local share link')}
+		</button>
 
 		<div class="flex justify-center space-x-1 mt-1.5">
 			{#if ($config?.enable_sharing ?? true)}
