@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import fileSaver from 'file-saver';
-	const { saveAs } = fileSaver;
 
 	import { Separator } from 'bits-ui';
 	import { getChatById, shareChatById } from '$lib/apis/chats';
@@ -19,7 +17,6 @@
 	import ChevronUpDown from '../icons/ChevronUpDown.svelte';
 	import Menu from './Navbar/Menu.svelte';
 	import TagChatModal from '../chat/TagChatModal.svelte';
-	import { copyToClipboard } from '$lib/utils';
 
 	const i18n = getContext('i18n');
 
@@ -37,71 +34,9 @@
 
 	let showShareChatModal = false;
 	let showTagChatModal = false;
-
-	const shareChat = async () => {
-		if (!($config?.enable_sharing ?? true)) {
-			return;
-		}
-		const chat = (await getChatById(localStorage.token, $chatId)).chat;
-		console.log('share', chat);
-
-		toast.success($i18n.t('Redirecting you to OpenWebUI Community'));
-		const url = 'https://openwebui.com';
-		// const url = 'http://localhost:5173';
-
-		const tab = await window.open(`${url}/chats/upload`, '_blank');
-		window.addEventListener(
-			'message',
-			(event) => {
-				if (event.origin !== url) return;
-				if (event.data === 'loaded') {
-					tab.postMessage(
-						JSON.stringify({
-							chat: chat,
-							modelfiles: $modelfiles.filter((modelfile) => chat.models.includes(modelfile.tagName))
-						}),
-						'*'
-					);
-				}
-			},
-			false
-		);
-	};
-
-	const shareLocalChat = async () => {
-		const chat = await getChatById(localStorage.token, $chatId);
-		console.log('shareLocal', chat);
-		if (chat.share_id) {
-			const shareUrl = `${window.location.origin}/s/${chat.share_id}`;
-			toast.info(
-				$i18n.t('Chat is already shared at {{shareUrl}}, copied to clipboard', { shareUrl })
-			);
-			copyToClipboard(shareUrl);
-		} else {
-			const sharedChat = await shareChatById(localStorage.token, $chatId);
-			const shareUrl = `${window.location.origin}/s/${sharedChat.id}`;
-			toast.info($i18n.t('Chat is now shared at {{shareUrl}}, copied to clipboard', { shareUrl }));
-			copyToClipboard(shareUrl);
-		}
-	};
-
-	const downloadChat = async () => {
-		const chat = (await getChatById(localStorage.token, $chatId)).chat;
-		console.log('download', chat);
-
-		const chatText = chat.messages.reduce((a, message, i, arr) => {
-			return `${a}### ${message.role.toUpperCase()}\n${message.content}\n\n`;
-		}, '');
-
-		let blob = new Blob([chatText], {
-			type: 'text/plain'
-		});
-
-		saveAs(blob, `chat-${chat.title}.txt`);
-	};
 </script>
 
-<ShareChatModal bind:show={showShareChatModal} {downloadChat} {shareChat} {shareLocalChat} />
+<ShareChatModal bind:show={showShareChatModal} />
 <!-- <TagChatModal bind:show={showTagChatModal} {tags} {deleteTag} {addTag} /> -->
 <nav id="nav" class=" sticky py-2.5 top-0 flex flex-row justify-center z-30">
 	<div

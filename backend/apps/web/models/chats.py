@@ -98,7 +98,7 @@ class ChatTable:
         except:
             return None
 
-    def insert_shared_chat(self, chat_id: str) -> Optional[ChatModel]:
+    def insert_shared_chat_by_chat_id(self, chat_id: str) -> Optional[ChatModel]:
         # Get the existing chat to share
         chat = Chat.get(Chat.id == chat_id)
         # Check if the chat is already shared
@@ -108,7 +108,7 @@ class ChatTable:
         shared_chat = ChatModel(
             **{
                 "id": str(uuid.uuid4()),
-                "user_id": "shared",
+                "user_id": f"shared-{chat_id}",
                 "title": chat.title,
                 "chat": chat.chat,
                 "timestamp": int(time.time()),
@@ -122,8 +122,35 @@ class ChatTable:
 
         return shared_chat if (shared_result and result) else None
 
+    def update_shared_chat_by_chat_id(self, chat_id: str) -> Optional[ChatModel]:
+        try:
+            print("update_shared_chat_by_id")
+            chat = Chat.get(Chat.id == chat_id)
+            print(chat)
+
+            query = Chat.update(
+                title=chat.title,
+                chat=chat.chat,
+            ).where(Chat.id == chat.share_id)
+
+            query.execute()
+
+            chat = Chat.get(Chat.id == chat.share_id)
+            return ChatModel(**model_to_dict(chat))
+        except:
+            return None
+
+    def delete_shared_chat_by_chat_id(self, chat_id: str) -> bool:
+        try:
+            query = Chat.delete().where(Chat.user_id == f"shared-{chat_id}")
+            query.execute()  # Remove the rows, return number of rows removed.
+
+            return True
+        except:
+            return False
+
     def update_chat_share_id_by_id(
-        self, od: str, share_id: Optional[str]
+        self, id: str, share_id: Optional[str]
     ) -> Optional[ChatModel]:
         try:
             query = Chat.update(
@@ -172,6 +199,13 @@ class ChatTable:
             .order_by(Chat.timestamp.desc())
         ]
 
+    def get_chat_by_id(self, id: str) -> Optional[ChatModel]:
+        try:
+            chat = Chat.get(Chat.id == id)
+            return ChatModel(**model_to_dict(chat))
+        except:
+            return None
+
     def get_chat_by_id_and_user_id(self, id: str, user_id: str) -> Optional[ChatModel]:
         try:
             chat = Chat.get(Chat.id == id, Chat.user_id == user_id)
@@ -190,13 +224,30 @@ class ChatTable:
             query = Chat.delete().where((Chat.id == id) & (Chat.user_id == user_id))
             query.execute()  # Remove the rows, return number of rows removed.
 
-            return True
+            return True and self.delete_shared_chat_by_chat_id(id)
         except:
             return False
 
     def delete_chats_by_user_id(self, user_id: str) -> bool:
         try:
+
+            self.delete_shared_chats_by_user_id(user_id)
+
             query = Chat.delete().where(Chat.user_id == user_id)
+            query.execute()  # Remove the rows, return number of rows removed.
+
+            return True
+        except:
+            return False
+
+    def delete_shared_chats_by_user_id(self, user_id: str) -> bool:
+        try:
+            shared_chat_ids = [
+                f"shared-{chat.id}"
+                for chat in Chat.select().where(Chat.user_id == user_id)
+            ]
+
+            query = Chat.delete().where(Chat.user_id << shared_chat_ids)
             query.execute()  # Remove the rows, return number of rows removed.
 
             return True

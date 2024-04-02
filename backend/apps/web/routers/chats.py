@@ -207,12 +207,12 @@ async def share_chat_by_id(id: str, user=Depends(get_current_user)):
     chat = Chats.get_chat_by_id_and_user_id(id, user.id)
     if chat:
         if chat.share_id:
-            shared_chat = Chats.get_chat_by_id_and_user_id(chat.share_id, "shared")
+            shared_chat = Chats.update_shared_chat_by_chat_id(chat.id)
             return ChatResponse(
                 **{**shared_chat.model_dump(), "chat": json.loads(shared_chat.chat)}
             )
 
-        shared_chat = Chats.insert_shared_chat(chat.id)
+        shared_chat = Chats.insert_shared_chat_by_chat_id(chat.id)
         if not shared_chat:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -240,10 +240,11 @@ async def delete_shared_chat_by_id(id: str, user=Depends(get_current_user)):
     if chat:
         if not chat.share_id:
             return False
-        result = Chats.delete_chat_by_id_and_user_id(chat.share_id, "shared")
-        update_result = Chats.update_chat_share_id_by_id(chat.id, None)
 
-        return result and update_result
+        result = Chats.delete_shared_chat_by_chat_id(id)
+        update_result = Chats.update_chat_share_id_by_id(id, None)
+
+        return result and update_result != None
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -256,9 +257,9 @@ async def delete_shared_chat_by_id(id: str, user=Depends(get_current_user)):
 ############################
 
 
-@router.get("/share/{id}", response_model=Optional[ChatResponse])
-async def get_shared_chat_by_id(id: str, user=Depends(get_current_user)):
-    chat = Chats.get_chat_by_id_and_user_id(id, "shared")
+@router.get("/share/{share_id}", response_model=Optional[ChatResponse])
+async def get_shared_chat_by_id(share_id: str, user=Depends(get_current_user)):
+    chat = Chats.get_chat_by_id(share_id)
 
     if chat:
         return ChatResponse(**{**chat.model_dump(), "chat": json.loads(chat.chat)})
