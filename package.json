@@ -1,6 +1,6 @@
 {
 	"name": "open-webui",
-	"version": "0.1.118-dockertest",
+	"version": "0.1.118-test2",
 	"private": true,
 	"scripts": {
 		"dev": "vite dev --host",
