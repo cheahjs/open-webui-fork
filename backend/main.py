@@ -42,6 +42,7 @@ from config import (
     GLOBAL_LOG_LEVEL,
     SRC_LOG_LEVELS,
     WEBHOOK_URL,
+    ALLOW_ADMIN_EXPORT,
 )
 from constants import ERROR_MESSAGES
 
@@ -171,6 +172,7 @@ async def get_app_config():
         "images": images_app.state.ENABLED,
         "default_models": webui_app.state.DEFAULT_MODELS,
         "default_prompt_suggestions": webui_app.state.DEFAULT_PROMPT_SUGGESTIONS,
+        "allow_admin_export": ALLOW_ADMIN_EXPORT,
     }
 
 
