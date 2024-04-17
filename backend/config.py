@@ -372,7 +372,7 @@ MODEL_FILTER_LIST = [model.strip() for model in MODEL_FILTER_LIST.split(";")]
 
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
 
-ALLOW_EXPORT_ALL_CHATS = os.environ.get("ALLOW_EXPORT_ALL_CHATS", "True").lower() == "true"
+ALLOW_ADMIN_EXPORT = os.environ.get("ALLOW_ADMIN_EXPORT", "True").lower() == "true"
 
 ####################################
 # WEBUI_VERSION

@@ -48,7 +48,7 @@ from config import (
     SRC_LOG_LEVELS,
     WEBHOOK_URL,
     IS_LOCAL,
-    ALLOW_EXPORT_ALL_CHATS,
+    ALLOW_ADMIN_EXPORT,
     ENABLE_SHARING,
 )
 from constants import ERROR_MESSAGES
@@ -206,8 +206,8 @@ async def get_app_config():
         "default_prompt_suggestions": webui_app.state.DEFAULT_PROMPT_SUGGESTIONS,
         "trusted_header_auth": bool(webui_app.state.AUTH_TRUSTED_EMAIL_HEADER),
         "is_local": IS_LOCAL,
-        "all_chat_export_allowed": ALLOW_EXPORT_ALL_CHATS,
-        "enable_sharing": ENABLE_SHARING,
+        "allow_admin_export": ALLOW_ADMIN_EXPORT,
+        "enable_sharing": ENABLE_SHARING,   
     }
 
 
