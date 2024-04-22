@@ -321,6 +321,18 @@ OPENAI_API_BASE_URLS = [
     for url in OPENAI_API_BASE_URLS.split(";")
 ]
 
+OPENAI_API_KEY = ""
+
+try:
+    OPENAI_API_KEY = OPENAI_API_KEYS[
+        OPENAI_API_BASE_URLS.index("https://api.openai.com/v1")
+    ]
+except:
+    pass
+
+OPENAI_API_BASE_URL = "https://api.openai.com/v1"
+
+
 ####################################
 # WEBUI
 ####################################
@@ -372,7 +384,7 @@ MODEL_FILTER_LIST = [model.strip() for model in MODEL_FILTER_LIST.split(";")]
 
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
 
-ALLOW_ADMIN_EXPORT = os.environ.get("ALLOW_ADMIN_EXPORT", "True").lower() == "true"
+ENABLE_ADMIN_EXPORT = os.environ.get("ENABLE_ADMIN_EXPORT", "True").lower() == "true"
 
 ####################################
 # WEBUI_VERSION
@@ -451,6 +463,9 @@ And answer according to the language of the user's question.
 Given the context information, answer the query.
 Query: [query]"""
 
+RAG_OPENAI_API_BASE_URL = os.getenv("RAG_OPENAI_API_BASE_URL", OPENAI_API_BASE_URL)
+RAG_OPENAI_API_KEY = os.getenv("RAG_OPENAI_API_KEY", OPENAI_API_KEY)
+
 ####################################
 # Transcribe
 ####################################
@@ -471,3 +486,11 @@ ENABLE_IMAGE_GENERATION = (
 )
 AUTOMATIC1111_BASE_URL = os.getenv("AUTOMATIC1111_BASE_URL", "")
 COMFYUI_BASE_URL = os.getenv("COMFYUI_BASE_URL", "")
+
+
+####################################
+# Audio
+####################################
+
+AUDIO_OPENAI_API_BASE_URL = os.getenv("AUDIO_OPENAI_API_BASE_URL", OPENAI_API_BASE_URL)
+AUDIO_OPENAI_API_KEY = os.getenv("AUDIO_OPENAI_API_KEY", OPENAI_API_KEY)
