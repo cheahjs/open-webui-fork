@@ -20,9 +20,7 @@ export const getModels = async (token: string) => {
 		})
 	]);
 
-	models = models
-		.filter((models) => models)
-		.reduce((a, e, i, arr) => a.concat(e, ...(i < arr.length - 1 ? [{ name: 'hr' }] : [])), []);
+	models = models.filter((models) => models).reduce((a, e, i, arr) => a.concat(e), []);
 
 	return models;
 };
@@ -37,7 +35,6 @@ export const sanitizeResponseContent = (content: string) => {
 		.replace(/<\|[a-z]+\|$/, '')
 		.replace(/<$/, '')
 		.replaceAll(/<\|[a-z]+\|>/g, ' ')
-		.replaceAll(/<br\s?\/?>/gi, '\n')
 		.replaceAll('<', '&lt;')
 		.trim();
 };
