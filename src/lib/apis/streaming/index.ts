@@ -26,16 +26,28 @@ async function* openAIStreamToIterator(
 			break;
 		}
 		const lines = value.split('\n');
-		for (const line of lines) {
+		for (let line of lines) {
+			if (line.endsWith('\r')) {
+				// Remove trailing \r
+				line = line.slice(0, -1);
+			}
 			if (line !== '') {
 				console.log(line);
 				if (line === 'data: [DONE]') {
 					yield { done: true, value: '' };
+				} else if (line.startsWith(':')) {
+					// Events starting with : are comments https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#event_stream_format
+					// OpenRouter sends heartbeats like ": OPENROUTER PROCESSING"
+					continue;
 				} else {
-					const data = JSON.parse(line.replace(/^data: /, ''));
-					console.log(data);
+					try {
+						const data = JSON.parse(line.replace(/^data: /, ''));
+						console.log(data);
 
-					yield { done: false, value: data.choices[0].delta.content ?? '' };
+						yield { done: false, value: data.choices?.[0]?.delta?.content ?? '' };
+					} catch (e) {
+						console.error('Error extracting delta from SSE event:', e);
+					}
 				}
 			}
 		}
@@ -61,7 +73,11 @@ async function* streamLargeDeltasAsRandomChunks(
 			const chunkSize = Math.min(Math.floor(Math.random() * 3) + 1, content.length);
 			const chunk = content.slice(0, chunkSize);
 			yield { done: false, value: chunk };
-			await sleep(5);
+			// Do not sleep if the tab is hidden
+			// Timers are throttled to 1s in hidden tabs
+			if (document?.visibilityState !== 'hidden') {
+				await sleep(5);
+			}
 			content = content.slice(chunkSize);
 		}
 	}

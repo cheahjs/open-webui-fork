@@ -133,8 +133,9 @@
 	};
 
 	const renderLatex = () => {
-		let chatMessageElements = document.getElementsByClassName('chat-assistant');
-		// let lastChatMessageElement = chatMessageElements[chatMessageElements.length - 1];
+		let chatMessageElements = document
+			.getElementById(`message-${message.id}`)
+			?.getElementsByClassName('chat-assistant');
 
 		for (const element of chatMessageElements) {
 			auto_render(element, {
@@ -322,9 +323,11 @@
 </script>
 
 {#key message.id}
-	<div class=" flex w-full message-{message.id}">
+	<div class=" flex w-full message-{message.id}" id="message-{message.id}">
 		<ProfileImage
-			src={modelfiles[message.model]?.imageUrl ?? `${WEBUI_BASE_URL}/static/favicon.png`}
+			src={modelfiles[message.model]?.imageUrl ?? $i18n.language === 'dg-DG'
+				? `/doge.png`
+				: `${WEBUI_BASE_URL}/static/favicon.png`}
 		/>
 
 		<div class="w-full overflow-hidden">
@@ -376,7 +379,7 @@
 
 								<div class=" mt-2 mb-1 flex justify-center space-x-2 text-sm font-medium">
 									<button
-										class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-gray-100 transition rounded-lg"
+										class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-gray-100 transition rounded-lg-lg"
 										on:click={() => {
 											editMessageConfirmHandler();
 										}}
@@ -491,7 +494,7 @@
 										{/if}
 
 										{#if !readOnly}
-											<Tooltip content="Edit" placement="bottom">
+											<Tooltip content={$i18n.t('Edit')} placement="bottom">
 												<button
 													class="{isLastMessage
 														? 'visible'
@@ -518,7 +521,7 @@
 											</Tooltip>
 										{/if}
 
-										<Tooltip content="Copy" placement="bottom">
+										<Tooltip content={$i18n.t('Copy')} placement="bottom">
 											<button
 												class="{isLastMessage
 													? 'visible'
@@ -545,7 +548,7 @@
 										</Tooltip>
 
 										{#if !readOnly}
-											<Tooltip content="Good Response" placement="bottom">
+											<Tooltip content={$i18n.t('Good Response')} placement="bottom">
 												<button
 													class="{isLastMessage
 														? 'visible'
@@ -580,7 +583,7 @@
 												</button>
 											</Tooltip>
 
-											<Tooltip content="Bad Response" placement="bottom">
+											<Tooltip content={$i18n.t('Bad Response')} placement="bottom">
 												<button
 													class="{isLastMessage
 														? 'visible'
@@ -615,7 +618,7 @@
 											</Tooltip>
 										{/if}
 
-										<Tooltip content="Read Aloud" placement="bottom">
+										<Tooltip content={$i18n.t('Read Aloud')} placement="bottom">
 											<button
 												id="speak-button-{message.id}"
 												class="{isLastMessage
@@ -764,7 +767,7 @@
 										{/if}
 
 										{#if message.info}
-											<Tooltip content="Generation Info" placement="bottom">
+											<Tooltip content={$i18n.t('Generation Info')} placement="bottom">
 												<button
 													class=" {isLastMessage
 														? 'visible'
@@ -793,7 +796,7 @@
 										{/if}
 
 										{#if isLastMessage && !readOnly}
-											<Tooltip content="Continue Response" placement="bottom">
+											<Tooltip content={$i18n.t('Continue Response')} placement="bottom">
 												<button
 													type="button"
 													class="{isLastMessage
@@ -825,7 +828,7 @@
 												</button>
 											</Tooltip>
 
-											<Tooltip content="Regenerate" placement="bottom">
+											<Tooltip content={$i18n.t('Regenerate')} placement="bottom">
 												<button
 													type="button"
 													class="{isLastMessage
