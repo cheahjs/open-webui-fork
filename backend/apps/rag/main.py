@@ -36,7 +36,7 @@ import validators
 import urllib.parse
 import socket
 
-
+from langchain_text_splitters import TextSplitter, SentenceTransformersTokenTextSplitter
 from pydantic import BaseModel
 from typing import Optional
 import mimetypes
@@ -94,6 +94,8 @@ from config import (
     ENABLE_RAG_LOCAL_WEB_FETCH,
     YOUTUBE_LOADER_LANGUAGE,
     AppConfig,
+    CHUNK_SPLITTER_TYPE,
+    CHUNK_SPLITTER_MODEL,
 )
 
 from constants import ERROR_MESSAGES
@@ -113,6 +115,8 @@ app.state.config.ENABLE_RAG_WEB_LOADER_SSL_VERIFICATION = (
     ENABLE_RAG_WEB_LOADER_SSL_VERIFICATION
 )
 
+app.state.config.CHUNK_SPLITTER_TYPE = CHUNK_SPLITTER_TYPE
+app.state.config.CHUNK_SPLITTER_MODEL = CHUNK_SPLITTER_MODEL
 app.state.config.CHUNK_SIZE = CHUNK_SIZE
 app.state.config.CHUNK_OVERLAP = CHUNK_OVERLAP
 
@@ -618,8 +622,22 @@ def resolve_hostname(hostname):
     return ipv4_addresses, ipv6_addresses
 
 
-def store_data_in_vector_db(data, collection_name, overwrite: bool = False) -> bool:
+def get_text_splitter() -> TextSplitter:
+    if app.state.config.CHUNK_SPLITTER_TYPE == "sentence_transformers":
+        return TextSplitter.from_huggingface_tokenizer(
+            model_name=app.state.config.CHUNK_SPLITTER_MODEL,
+            chunk_overlap=app.state.config.CHUNK_OVERLAP,
+            add_start_index=True,
+        )
+    else:
+        return RecursiveCharacterTextSplitter(
+            chunk_size=app.state.config.CHUNK_SIZE,
+            chunk_overlap=app.state.config.CHUNK_OVERLAP,
+            add_start_index=True,
+        )
 
+
+def store_data_in_vector_db(data, collection_name, overwrite: bool = False) -> bool:
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=app.state.config.CHUNK_SIZE,
         chunk_overlap=app.state.config.CHUNK_OVERLAP,

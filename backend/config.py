@@ -667,6 +667,16 @@ if USE_CUDA.lower() == "true":
 else:
     DEVICE_TYPE = "cpu"
 
+CHUNK_SPLITTER_TYPE = PersistentConfig(
+    "CHUNK_SPLITTER_TYPE",
+    "rag.chunk_splitter_type",
+    os.environ.get("CHUNK_SPLITTER_TYPE", "recursive"),
+)
+CHUNK_SPLITTER_MODEL = PersistentConfig(
+    "CHUNK_SPLITTER_MODEL",
+    "rag.chunk_splitter_model",
+    os.environ.get("CHUNK_SPLITTER_MODEL", ""),
+)
 CHUNK_SIZE = PersistentConfig(
     "CHUNK_SIZE", "rag.chunk_size", int(os.environ.get("CHUNK_SIZE", "1500"))
 )
