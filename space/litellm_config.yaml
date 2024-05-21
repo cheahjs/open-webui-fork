@@ -9,21 +9,13 @@ model_list:
     litellm_params:
       model: huggingface/mistralai/Mistral-7B-Instruct-v0.2
       api_key: os.environ/HF_TOKEN
-  - model_name: "HuggingFace: Cohere: Command-R+"
+  - model_name: "HuggingFace: Cohere: Command-R"
     litellm_params:
-      model: huggingface/CohereForAI/c4ai-command-r-plus
-      api_key: os.environ/HF_TOKEN
-  - model_name: "HuggingFace: Meta: Llama 3 70B Instruct"
-    litellm_params:
-      model: huggingface/meta-llama/Meta-Llama-3-70B-Instruct
+      model: huggingface/CohereForAI/c4ai-command-r
       api_key: os.environ/HF_TOKEN
   - model_name: "HuggingFace: Meta: Llama 3 8B Instruct"
     litellm_params:
       model: huggingface/meta-llama/Meta-Llama-3-8B-Instruct
-      api_key: os.environ/HF_TOKEN
-  - model_name: "HuggingFace: Zephyr 141B-A35B v0.1"
-    litellm_params:
-      model: huggingface/HuggingFaceH4/zephyr-orpo-141b-A35b-v0.1
       api_key: os.environ/HF_TOKEN
   - model_name: "HuggingFace: Mistral: Mixtral 8x7B Instruct v0.1"
     litellm_params:
@@ -33,6 +25,7 @@ model_list:
     litellm_params:
       model: huggingface/microsoft/Phi-3-mini-4k-instruct
       api_key: os.environ/HF_TOKEN
+      max_tokens: 1024
   - model_name: "HuggingFace: Google: Gemma 7B 1.1"
     litellm_params:
       model: huggingface/google/gemma-1.1-7b-it
