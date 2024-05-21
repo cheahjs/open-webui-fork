@@ -25,7 +25,7 @@ jobs:
         run: |
           git checkout dev
           git fetch origin
-          git checkout hf-spaces
+          git checkout hf-space
           git pull
           git merge origin/dev
-          git push origin hf-spaces
+          git push origin hf-space
