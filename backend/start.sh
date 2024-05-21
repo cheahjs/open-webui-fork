@@ -30,4 +30,26 @@ if [ "$USE_CUDA_DOCKER" = "true" ]; then
   export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/lib/python3.11/site-packages/torch/lib:/usr/local/lib/python3.11/site-packages/nvidia/cudnn/lib"
 fi
 
+# HFSPACE:START
+# Check if SPACE_ID is set, if so, configure for space
+if [ -n "$SPACE_ID" ]; then
+  echo "Configuring for HuggingFace Space deployment"
+  WEBUI_SECRET_KEY="$WEBUI_SECRET_KEY" uvicorn main:app --host "$HOST" --port "$PORT" --forwarded-allow-ips '*' &
+  webui_pid=$!
+  echo "Waiting for webui to start..."
+  while ! curl -s http://localhost:8080/healthz > /dev/null; do
+    sleep 1
+  done
+  echo "Creating admin user..."
+  curl \
+    -X POST "http://localhost:8080/api/v1/auths/signup" \
+    -H "accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d "{ \"email\": \"${ADMIN_USER_EMAIL}\", \"password\": \"${ADMIN_USER_PASSWORD}\", \"name\": \"Admin\" }"
+  echo "Shutting down webui..."
+  kill $webui_pid
+  export WEBUI_URL=${SPACE_HOST}
+fi
+# HFSPACE:END
+
 WEBUI_SECRET_KEY="$WEBUI_SECRET_KEY" exec uvicorn main:app --host "$HOST" --port "$PORT" --forwarded-allow-ips '*'
