@@ -3,8 +3,7 @@ name: Deploy to HuggingFace Spaces
 on:
   push:
     branches:
-      - dev
-      - main
+      - hf-space
   workflow_dispatch:
 
 jobs:
@@ -25,6 +24,8 @@ jobs:
     if: needs.check-secret.outputs.token-set == 'true'
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_USERNAME: ${{ secrets.HF_USERNAME }}
+      HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,23 +33,12 @@ jobs:
       - name: Remove git history
         run: rm -rf .git
 
-      - name: Prepend YAML front matter to README.md
-        run: |
-          echo "---" > temp_readme.md
-          echo "title: Open WebUI" >> temp_readme.md
-          echo "emoji: 🐳" >> temp_readme.md
-          echo "colorFrom: purple" >> temp_readme.md
-          echo "colorTo: gray" >> temp_readme.md
-          echo "sdk: docker" >> temp_readme.md
-          echo "app_port: 8080" >> temp_readme.md
-          echo "---" >> temp_readme.md
-          cat README.md >> temp_readme.md
-          mv temp_readme.md README.md
 
       - name: Configure git
         run: |
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
+
       - name: Set up Git and push to Space
         run: |
           git init --initial-branch=main
@@ -56,4 +46,4 @@ jobs:
           rm demo.gif
           git add .
           git commit -m "GitHub deploy: ${{ github.sha }}"
-          git push --force https://open-webui:${HF_TOKEN}@huggingface.co/spaces/open-webui/open-webui main
+          git push --force https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/${HF_SPACE_NAME} main

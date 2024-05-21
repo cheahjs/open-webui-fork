@@ -149,6 +149,10 @@ COPY --chown=$UID:$GID --from=build /app/package.json /app/package.json
 # copy backend files
 COPY --chown=$UID:$GID ./backend .
 
+# HFSPACE:START
+COPY --chown=$UID:$GID ./space/litellm_config.yaml ./data/litellm/config.yaml
+# HFSPACE:END
+
 EXPOSE 8080
 
 HEALTHCHECK CMD curl --silent --fail http://localhost:8080/health | jq -e '.status == true' || exit 1
