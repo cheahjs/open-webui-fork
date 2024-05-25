@@ -7,7 +7,7 @@ import chromadb
 from chromadb import Settings
 from base64 import b64encode
 from bs4 import BeautifulSoup
-from typing import TypeVar, Generic, Union
+from typing import TypeVar, Generic, Union, Optional
 
 from pathlib import Path
 import json
@@ -208,7 +208,13 @@ T = TypeVar("T")
 
 
 class PersistentConfig(Generic[T]):
-    def __init__(self, env_name: str, config_path: str, env_value: T):
+    def __init__(
+        self,
+        env_name: str,
+        config_path: str,
+        env_value: T,
+        help_text: Optional[str] = None,
+    ):
         self.env_name = env_name
         self.config_path = config_path
         self.env_value = env_value
@@ -424,6 +430,13 @@ OLLAMA_BASE_URLS = OLLAMA_BASE_URLS if OLLAMA_BASE_URLS != "" else OLLAMA_BASE_U
 OLLAMA_BASE_URLS = [url.strip() for url in OLLAMA_BASE_URLS.split(";")]
 OLLAMA_BASE_URLS = PersistentConfig(
     "OLLAMA_BASE_URLS", "ollama.base_urls", OLLAMA_BASE_URLS
+)
+
+OLLAMA_CLOUDFLARE_COMPATIBILITY = PersistentConfig(
+    "OLLAMA_CLOUDFLARE_COMPATIBILITY",
+    "ollama.cloudflare_compatibility",
+    os.environ.get("OLLAMA_CLOUDFLARE_COMPATIBILITY", "False").lower() == "true",
+    "Enable this to modify Ollama's streaming response to be compatible Cloudflare Tunnels",
 )
 
 ####################################

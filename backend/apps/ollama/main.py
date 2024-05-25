@@ -49,6 +49,7 @@ from config import (
     ENABLE_MODEL_FILTER,
     MODEL_FILTER_LIST,
     UPLOAD_DIR,
+    OLLAMA_CLOUDFLARE_COMPATIBILITY,
     AppConfig,
 )
 from utils.misc import calculate_sha256
@@ -339,6 +340,12 @@ async def pull_model(
 
             r.raise_for_status()
 
+            if (
+                OLLAMA_CLOUDFLARE_COMPATIBILITY
+                and r.headers["Content-Type"] == "application/x-ndjson"
+            ):
+                r.headers["Content-Type"] = "text/event-stream"
+
             return StreamingResponse(
                 stream_content(),
                 status_code=r.status_code,
@@ -411,6 +418,12 @@ async def push_model(
 
             r.raise_for_status()
 
+            if (
+                OLLAMA_CLOUDFLARE_COMPATIBILITY
+                and r.headers["Content-Type"] == "application/x-ndjson"
+            ):
+                r.headers["Content-Type"] = "text/event-stream"
+
             return StreamingResponse(
                 stream_content(),
                 status_code=r.status_code,
@@ -475,6 +488,12 @@ async def create_model(
             r.raise_for_status()
 
             log.debug(f"r: {r}")
+
+            if (
+                OLLAMA_CLOUDFLARE_COMPATIBILITY
+                and r.headers["Content-Type"] == "application/x-ndjson"
+            ):
+                r.headers["Content-Type"] = "text/event-stream"
 
             return StreamingResponse(
                 stream_content(),
@@ -826,6 +845,12 @@ async def generate_completion(
 
             r.raise_for_status()
 
+            if (
+                OLLAMA_CLOUDFLARE_COMPATIBILITY
+                and r.headers["Content-Type"] == "application/x-ndjson"
+            ):
+                r.headers["Content-Type"] = "text/event-stream"
+
             return StreamingResponse(
                 stream_content(),
                 status_code=r.status_code,
@@ -1010,6 +1035,12 @@ async def generate_chat_completion(
 
             r.raise_for_status()
 
+            if (
+                OLLAMA_CLOUDFLARE_COMPATIBILITY
+                and r.headers["Content-Type"] == "application/x-ndjson"
+            ):
+                r.headers["Content-Type"] = "text/event-stream"
+
             return StreamingResponse(
                 stream_content(),
                 status_code=r.status_code,
@@ -1162,6 +1193,12 @@ async def generate_openai_chat_completion(
             )
 
             r.raise_for_status()
+
+            if (
+                OLLAMA_CLOUDFLARE_COMPATIBILITY
+                and r.headers["Content-Type"] == "application/x-ndjson"
+            ):
+                r.headers["Content-Type"] = "text/event-stream"
 
             return StreamingResponse(
                 stream_content(),
@@ -1544,6 +1581,11 @@ async def deprecated_proxy(
             r.raise_for_status()
 
             # r.close()
+            if (
+                OLLAMA_CLOUDFLARE_COMPATIBILITY
+                and r.headers["Content-Type"] == "application/x-ndjson"
+            ):
+                r.headers["Content-Type"] = "text/event-stream"
 
             return StreamingResponse(
                 stream_content(),
