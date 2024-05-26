@@ -52,6 +52,15 @@ if [ -n "$SPACE_ID" ]; then
     kill $webui_pid
   fi
 
+  if [ -n "$OAUTH_CLIENT_ID" ]; then
+    echo "OAuth client ID provided, configuring for OAuth"
+    export OPENID_CLIENT_ID=$OAUTH_CLIENT_ID
+    export OPENID_CLIENT_SECRET=$OAUTH_CLIENT_SECRET
+    export OPENID_SCOPE=$OAUTH_SCOPES
+    export OPENID_PROVIDER_URL=${OPENID_PROVIDER_URL}/.well-known/openid-configuration
+    export OPENID_PROVIDER_NAME="Hugging Face"
+  fi
+
   export WEBUI_URL=${SPACE_HOST}
 fi
 

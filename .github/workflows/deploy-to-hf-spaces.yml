@@ -33,6 +33,22 @@ jobs:
       - name: Remove git history
         run: rm -rf .git
 
+      - name: Prepend YAML front matter to README.md
+        run: |
+          cat <<EOF >README.md
+          ---
+          title: Open WebUI
+          emoji: 🐳
+          colorFrom: purple
+          colorTo: gray
+          sdk: docker
+          app_port: 8080
+          hf_oauth: true
+          hf_oauth_scopes:
+            - email
+          ---
+          $(cat README.md)
+          EOF
 
       - name: Configure git
         run: |
