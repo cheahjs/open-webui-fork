@@ -574,6 +574,7 @@ ENABLE_COMMUNITY_SHARING = PersistentConfig(
     os.environ.get("ENABLE_COMMUNITY_SHARING", "True").lower() == "true",
 )
 
+
 class BannerModel(BaseModel):
     id: str
     type: str
@@ -586,7 +587,10 @@ class BannerModel(BaseModel):
 WEBUI_BANNERS = PersistentConfig(
     "WEBUI_BANNERS",
     "ui.banners",
-    [BannerModel(**banner) for banner in json.loads("[]")],
+    [
+        BannerModel(**banner)
+        for banner in json.loads(os.environ.get("WEBUI_BANNERS", "[]"))
+    ],
 )
 
 ####################################
