@@ -143,6 +143,11 @@ type Config = {
 		enable_admin_export: boolean;
 		enable_community_sharing: boolean;
 	};
+	oauth: {
+		providers: {
+			[key: string]: string;
+		};
+	};
 };
 
 type PromptSuggestion = {

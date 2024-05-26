@@ -56,6 +56,7 @@ from config import (
     ENABLE_ADMIN_EXPORT,
     AppConfig,
     WEBUI_BUILD_HASH,
+    OAUTH_PROVIDERS,
 )
 from constants import ERROR_MESSAGES
 
@@ -368,6 +369,12 @@ async def get_app_config():
             "enable_image_generation": images_app.state.config.ENABLED,
             "enable_admin_export": ENABLE_ADMIN_EXPORT,
             "enable_community_sharing": webui_app.state.config.ENABLE_COMMUNITY_SHARING,
+        },
+        "oauth": {
+            "providers": {
+                name: config.get("name", name)
+                for name, config in OAUTH_PROVIDERS.items()
+            }
         },
     }
 

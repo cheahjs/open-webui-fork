@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Depends
 from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+
 from apps.webui.routers import (
     auths,
     users,
@@ -26,6 +28,8 @@ from config import (
     WEBUI_BANNERS,
     AppConfig,
     ENABLE_COMMUNITY_SHARING,
+    WEBUI_SECRET_KEY,
+    OAUTH_PROVIDERS,
 )
 
 app = FastAPI()
@@ -57,6 +61,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# SessionMiddleware is used by authlib for oauth
+if len(OAUTH_PROVIDERS) > 0:
+    app.add_middleware(
+        SessionMiddleware, secret_key=WEBUI_SECRET_KEY, session_cookie="oui-session"
+    )
 
 app.include_router(auths.router, prefix="/auths", tags=["auths"])
 app.include_router(users.router, prefix="/users", tags=["users"])
