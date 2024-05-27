@@ -20,6 +20,7 @@
 	import Models from './MessageInput/Models.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
+	import TokenCounter from '$lib/components/chat/TokenCounter.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -541,6 +542,11 @@
 							</div>
 						</div>
 					{/if}
+					<TokenCounter
+						className="absolute right-0 px-3 {atSelectedModel !== undefined ? 'bottom-8' : 'bottom-1'}"
+						text={messages.map((m) => m.message).join('\n') + prompt}
+						modelId="Xenova/gpt-4"
+					/>
 				</div>
 			</div>
 		</div>
