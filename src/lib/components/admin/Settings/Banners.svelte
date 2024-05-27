@@ -80,12 +80,13 @@
 								bind:value={banner.type}
 							>
 								{#if banner.type == ''}
-									<option value="" selected disabled class="">{$i18n.t('Type')}</option>
+									<option value="" selected disabled class="text-gray-900">{$i18n.t('Type')}</option
+									>
 								{/if}
-								<option value="info">{$i18n.t('Info')}</option>
-								<option value="warning">{$i18n.t('Warning')}</option>
-								<option value="error">{$i18n.t('Error')}</option>
-								<option value="success">{$i18n.t('Success')}</option>
+								<option value="info" class="text-gray-900">{$i18n.t('Info')}</option>
+								<option value="warning" class="text-gray-900">{$i18n.t('Warning')}</option>
+								<option value="error" class="text-gray-900">{$i18n.t('Error')}</option>
+								<option value="success" class="text-gray-900">{$i18n.t('Success')}</option>
 							</select>
 
 							<input
