@@ -36,15 +36,15 @@ if [ -n "$SPACE_ID" ]; then
   echo "Configuring for HuggingFace Space deployment"
   if [ -n "$ADMIN_USER_EMAIL" ] && [ -n "$ADMIN_USER_PASSWORD" ]; then
     echo "Admin user configured, creating"
-    WEBUI_SECRET_KEY="$WEBUI_SECRET_KEY" uvicorn main:app --host "$HOST" --port "$PORT" --forwarded-allow-ips '*' &
+    WEBUI_SECRET_KEY="$WEBUI_SECRET_KEY" uvicorn main:app --host "$HOST" --port "8081" --forwarded-allow-ips '*' &
     webui_pid=$!
     echo "Waiting for webui to start..."
-    while ! curl -s http://localhost:8080/health > /dev/null; do
+    while ! curl -s http://localhost:8081/health > /dev/null; do
       sleep 1
     done
     echo "Creating admin user..."
     curl \
-      -X POST "http://localhost:8080/api/v1/auths/signup" \
+      -X POST "http://localhost:8081/api/v1/auths/signup" \
       -H "accept: application/json" \
       -H "Content-Type: application/json" \
       -d "{ \"email\": \"${ADMIN_USER_EMAIL}\", \"password\": \"${ADMIN_USER_PASSWORD}\", \"name\": \"Admin\" }"
@@ -54,11 +54,9 @@ if [ -n "$SPACE_ID" ]; then
 
   if [ -n "$OAUTH_CLIENT_ID" ]; then
     echo "OAuth client ID provided, configuring for OAuth"
-    export OPENID_CLIENT_ID=$OAUTH_CLIENT_ID
-    export OPENID_CLIENT_SECRET=$OAUTH_CLIENT_SECRET
-    export OPENID_SCOPE=$OAUTH_SCOPES
     export OPENID_PROVIDER_URL=${OPENID_PROVIDER_URL}/.well-known/openid-configuration
-    export OPENID_PROVIDER_NAME="Hugging Face"
+    export OPENID_PROVIDER_URL=${OPENID_PROVIDER_URL}/.well-known/openid-configuration
+    export OAUTH_PROVIDER_NAME="Hugging Face"
   fi
 
   export WEBUI_URL=${SPACE_HOST}
