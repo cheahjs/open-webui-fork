@@ -3,7 +3,7 @@
 	import { getSessionUser, userSignIn, userSignUp } from '$lib/apis/auths';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
-	import { WEBUI_NAME, config, user } from '$lib/stores';
+	import { WEBUI_NAME, config, user, socket } from '$lib/stores';
 	import { onMount, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { generateInitialsImage, canvasPixelTest } from '$lib/utils';
@@ -25,6 +25,8 @@
 			if (sessionUser.token) {
 				localStorage.token = sessionUser.token;
 			}
+
+			$socket.emit('user-join', { auth: { token: sessionUser.token } });
 			await user.set(sessionUser);
 			goto('/');
 		}
@@ -246,7 +248,7 @@
 						</div>
 					</form>
 
-					{#if Object.keys($config?.oauth?.providers ?? {}).length > 0 }
+					{#if Object.keys($config?.oauth?.providers ?? {}).length > 0}
 						<div class="inline-flex items-center justify-center w-full">
 							<hr class="w-64 h-px my-8 bg-gray-200 border-0 dark:bg-gray-700" />
 							<span
@@ -255,11 +257,11 @@
 							>
 						</div>
 						<div class="flex flex-col space-y-2">
-							{#if $config?.oauth?.providers?.google }
+							{#if $config?.oauth?.providers?.google}
 								<button
 									class="flex items-center px-6 border-2 dark:border-gray-800 duration-300 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 w-full rounded-2xl dark:text-white text-sm py-3 transition"
 									on:click={() => {
-										window.location.href = `${WEBUI_API_BASE_URL}/auths/oauth/google/login`;
+										window.location.href = `${WEBUI_BASE_URL}/oauth/google/login`;
 									}}
 								>
 									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" class="size-6 mr-3">
@@ -280,11 +282,11 @@
 									<span>{$i18n.t('Continue with {{provider}}', { provider: 'Google' })}</span>
 								</button>
 							{/if}
-							{#if $config?.oauth?.providers?.microsoft }
+							{#if $config?.oauth?.providers?.microsoft}
 								<button
 									class="flex items-center px-6 border-2 dark:border-gray-800 duration-300 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 w-full rounded-2xl dark:text-white text-sm py-3 transition"
 									on:click={() => {
-										window.location.href = `${WEBUI_API_BASE_URL}/auths/oauth/microsoft/login`;
+										window.location.href = `${WEBUI_BASE_URL}/oauth/microsoft/login`;
 									}}
 								>
 									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" class="size-6 mr-3">
@@ -305,11 +307,11 @@
 									<span>{$i18n.t('Continue with {{provider}}', { provider: 'Microsoft' })}</span>
 								</button>
 							{/if}
-							{#if $config?.oauth?.providers?.oidc }
+							{#if $config?.oauth?.providers?.oidc}
 								<button
 									class="flex items-center px-6 border-2 dark:border-gray-800 duration-300 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 w-full rounded-2xl dark:text-white text-sm py-3 transition"
 									on:click={() => {
-										window.location.href = `${WEBUI_API_BASE_URL}/auths/oauth/oidc/login`;
+										window.location.href = `${WEBUI_BASE_URL}/oauth/oidc/login`;
 									}}
 								>
 									<svg

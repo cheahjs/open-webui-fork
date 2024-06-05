@@ -180,6 +180,17 @@ WEBUI_BUILD_HASH = os.environ.get("WEBUI_BUILD_HASH", "dev-build")
 DATA_DIR = Path(os.getenv("DATA_DIR", BACKEND_DIR / "data")).resolve()
 FRONTEND_BUILD_DIR = Path(os.getenv("FRONTEND_BUILD_DIR", BASE_DIR / "build")).resolve()
 
+RESET_CONFIG_ON_START = (
+    os.environ.get("RESET_CONFIG_ON_START", "False").lower() == "true"
+)
+if RESET_CONFIG_ON_START:
+    try:
+        os.remove(f"{DATA_DIR}/config.json")
+        with open(f"{DATA_DIR}/config.json", "w") as f:
+            f.write("{}")
+    except:
+        pass
+
 try:
     CONFIG_DATA = json.loads((DATA_DIR / "config.json").read_text())
 except:
@@ -297,41 +308,124 @@ ENABLE_OAUTH_SIGNUP = PersistentConfig(
     os.environ.get("ENABLE_OAUTH_SIGNUP", "False").lower() == "true",
 )
 
+OAUTH_MERGE_ACCOUNTS_BY_EMAIL = PersistentConfig(
+    "OAUTH_MERGE_ACCOUNTS_BY_EMAIL",
+    "oauth.merge_accounts_by_email",
+    os.environ.get("OAUTH_MERGE_ACCOUNTS_BY_EMAIL", "False").lower() == "true",
+)
+
 OAUTH_PROVIDERS = {}
 
-if os.environ.get("GOOGLE_CLIENT_ID") and os.environ.get("GOOGLE_CLIENT_SECRET"):
-    OAUTH_PROVIDERS["google"] = {
-        "client_id": os.environ.get("GOOGLE_CLIENT_ID"),
-        "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET"),
-        "server_metadata_url": "https://accounts.google.com/.well-known/openid-configuration",
-        "scope": os.environ.get("GOOGLE_OAUTH_SCOPE", "openid email profile"),
-    }
+GOOGLE_CLIENT_ID = PersistentConfig(
+    "GOOGLE_CLIENT_ID",
+    "oauth.google.client_id",
+    os.environ.get("GOOGLE_CLIENT_ID", ""),
+)
 
-if (
-    os.environ.get("MICROSOFT_CLIENT_ID")
-    and os.environ.get("MICROSOFT_CLIENT_SECRET")
-    and os.environ.get("MICROSOFT_CLIENT_TENANT_ID")
-):
-    OAUTH_PROVIDERS["microsoft"] = {
-        "client_id": os.environ.get("MICROSOFT_CLIENT_ID"),
-        "client_secret": os.environ.get("MICROSOFT_CLIENT_SECRET"),
-        "server_metadata_url": f"https://login.microsoftonline.com/{os.environ.get('MICROSOFT_CLIENT_TENANT_ID')}/v2.0/.well-known/openid-configuration",
-        "scope": os.environ.get("MICROSOFT_OAUTH_SCOPE", "openid email profile"),
-    }
+GOOGLE_CLIENT_SECRET = PersistentConfig(
+    "GOOGLE_CLIENT_SECRET",
+    "oauth.google.client_secret",
+    os.environ.get("GOOGLE_CLIENT_SECRET", ""),
+)
 
-if (
-    os.environ.get("OPENID_CLIENT_ID")
-    and os.environ.get("OPENID_CLIENT_SECRET")
-    and os.environ.get("OPENID_PROVIDER_URL")
-):
-    OAUTH_PROVIDERS["oidc"] = {
-        "client_id": os.environ.get("OPENID_CLIENT_ID"),
-        "client_secret": os.environ.get("OPENID_CLIENT_SECRET"),
-        "server_metadata_url": os.environ.get("OPENID_PROVIDER_URL"),
-        "scope": os.environ.get("OPENID_SCOPE", "openid email profile"),
-        "name": os.environ.get("OPENID_PROVIDER_NAME", "SSO"),
-    }
+GOOGLE_OAUTH_SCOPE = PersistentConfig(
+    "GOOGLE_OAUTH_SCOPE",
+    "oauth.google.scope",
+    os.environ.get("GOOGLE_OAUTH_SCOPE", "openid email profile"),
+)
 
+MICROSOFT_CLIENT_ID = PersistentConfig(
+    "MICROSOFT_CLIENT_ID",
+    "oauth.microsoft.client_id",
+    os.environ.get("MICROSOFT_CLIENT_ID", ""),
+)
+
+MICROSOFT_CLIENT_SECRET = PersistentConfig(
+    "MICROSOFT_CLIENT_SECRET",
+    "oauth.microsoft.client_secret",
+    os.environ.get("MICROSOFT_CLIENT_SECRET", ""),
+)
+
+MICROSOFT_CLIENT_TENANT_ID = PersistentConfig(
+    "MICROSOFT_CLIENT_TENANT_ID",
+    "oauth.microsoft.tenant_id",
+    os.environ.get("MICROSOFT_CLIENT_TENANT_ID", ""),
+)
+
+MICROSOFT_OAUTH_SCOPE = PersistentConfig(
+    "MICROSOFT_OAUTH_SCOPE",
+    "oauth.microsoft.scope",
+    os.environ.get("MICROSOFT_OAUTH_SCOPE", "openid email profile"),
+)
+
+OAUTH_CLIENT_ID = PersistentConfig(
+    "OAUTH_CLIENT_ID",
+    "oauth.oidc.client_id",
+    os.environ.get("OAUTH_CLIENT_ID", ""),
+)
+
+OAUTH_CLIENT_SECRET = PersistentConfig(
+    "OAUTH_CLIENT_SECRET",
+    "oauth.oidc.client_secret",
+    os.environ.get("OAUTH_CLIENT_SECRET", ""),
+)
+
+OPENID_PROVIDER_URL = PersistentConfig(
+    "OPENID_PROVIDER_URL",
+    "oauth.oidc.provider_url",
+    os.environ.get("OPENID_PROVIDER_URL", ""),
+)
+
+OAUTH_SCOPES = PersistentConfig(
+    "OAUTH_SCOPES",
+    "oauth.oidc.scopes",
+    os.environ.get("OAUTH_SCOPES", "openid email profile"),
+)
+
+OAUTH_PROVIDER_NAME = PersistentConfig(
+    "OAUTH_PROVIDER_NAME",
+    "oauth.oidc.provider_name",
+    os.environ.get("OAUTH_PROVIDER_NAME", "SSO"),
+)
+
+
+def load_oauth_providers():
+    OAUTH_PROVIDERS.clear()
+    if GOOGLE_CLIENT_ID.value and GOOGLE_CLIENT_SECRET.value:
+        OAUTH_PROVIDERS["google"] = {
+            "client_id": GOOGLE_CLIENT_ID.value,
+            "client_secret": GOOGLE_CLIENT_SECRET.value,
+            "server_metadata_url": "https://accounts.google.com/.well-known/openid-configuration",
+            "scope": GOOGLE_OAUTH_SCOPE.value,
+        }
+
+    if (
+        MICROSOFT_CLIENT_ID.value
+        and MICROSOFT_CLIENT_SECRET.value
+        and MICROSOFT_CLIENT_TENANT_ID.value
+    ):
+        OAUTH_PROVIDERS["microsoft"] = {
+            "client_id": MICROSOFT_CLIENT_ID.value,
+            "client_secret": MICROSOFT_CLIENT_SECRET.value,
+            "server_metadata_url": f"https://login.microsoftonline.com/{MICROSOFT_CLIENT_TENANT_ID.value}/v2.0/.well-known/openid-configuration",
+            "scope": MICROSOFT_OAUTH_SCOPE.value,
+        }
+
+    if (
+        OAUTH_CLIENT_ID.value
+        and OAUTH_CLIENT_SECRET.value
+        and OPENID_PROVIDER_URL.value
+    ):
+        OAUTH_PROVIDERS["oidc"] = {
+            "client_id": OAUTH_CLIENT_ID.value,
+            "client_secret": OAUTH_CLIENT_SECRET.value,
+            "server_metadata_url": OPENID_PROVIDER_URL.value,
+            "scope": OAUTH_SCOPES.value,
+            "name": OAUTH_PROVIDER_NAME.value,
+        }
+
+
+load_oauth_providers()
 
 ####################################
 # Static DIR
@@ -639,6 +733,20 @@ WEBUI_BANNERS = PersistentConfig(
     ],
 )
 
+
+SHOW_ADMIN_DETAILS = PersistentConfig(
+    "SHOW_ADMIN_DETAILS",
+    "auth.admin.show",
+    os.environ.get("SHOW_ADMIN_DETAILS", "true").lower() == "true",
+)
+
+ADMIN_EMAIL = PersistentConfig(
+    "ADMIN_EMAIL",
+    "auth.admin.email",
+    os.environ.get("ADMIN_EMAIL", None),
+)
+
+
 ####################################
 # WEBUI_SECRET_KEY
 ####################################
@@ -648,6 +756,11 @@ WEBUI_SECRET_KEY = os.environ.get(
     os.environ.get(
         "WEBUI_JWT_SECRET_KEY", "t0p-s3cr3t"
     ),  # DEPRECATED: remove at next major version
+)
+
+WEBUI_SESSION_COOKIE_SAME_SITE = os.environ.get(
+    "WEBUI_SESSION_COOKIE_SAME_SITE",
+    os.environ.get("WEBUI_SESSION_COOKIE_SAME_SITE", "lax"),
 )
 
 if WEBUI_AUTH and WEBUI_SECRET_KEY == "":
@@ -719,6 +832,12 @@ RAG_EMBEDDING_MODEL_AUTO_UPDATE = (
 
 RAG_EMBEDDING_MODEL_TRUST_REMOTE_CODE = (
     os.environ.get("RAG_EMBEDDING_MODEL_TRUST_REMOTE_CODE", "").lower() == "true"
+)
+
+RAG_EMBEDDING_OPENAI_BATCH_SIZE = PersistentConfig(
+    "RAG_EMBEDDING_OPENAI_BATCH_SIZE",
+    "rag.embedding_openai_batch_size",
+    os.environ.get("RAG_EMBEDDING_OPENAI_BATCH_SIZE", 1),
 )
 
 RAG_RERANKING_MODEL = PersistentConfig(
@@ -814,6 +933,75 @@ YOUTUBE_LOADER_LANGUAGE = PersistentConfig(
     "rag.youtube_loader_language",
     os.getenv("YOUTUBE_LOADER_LANGUAGE", "en").split(","),
 )
+
+
+ENABLE_RAG_WEB_SEARCH = PersistentConfig(
+    "ENABLE_RAG_WEB_SEARCH",
+    "rag.web.search.enable",
+    os.getenv("ENABLE_RAG_WEB_SEARCH", "False").lower() == "true",
+)
+
+RAG_WEB_SEARCH_ENGINE = PersistentConfig(
+    "RAG_WEB_SEARCH_ENGINE",
+    "rag.web.search.engine",
+    os.getenv("RAG_WEB_SEARCH_ENGINE", ""),
+)
+
+SEARXNG_QUERY_URL = PersistentConfig(
+    "SEARXNG_QUERY_URL",
+    "rag.web.search.searxng_query_url",
+    os.getenv("SEARXNG_QUERY_URL", ""),
+)
+
+GOOGLE_PSE_API_KEY = PersistentConfig(
+    "GOOGLE_PSE_API_KEY",
+    "rag.web.search.google_pse_api_key",
+    os.getenv("GOOGLE_PSE_API_KEY", ""),
+)
+
+GOOGLE_PSE_ENGINE_ID = PersistentConfig(
+    "GOOGLE_PSE_ENGINE_ID",
+    "rag.web.search.google_pse_engine_id",
+    os.getenv("GOOGLE_PSE_ENGINE_ID", ""),
+)
+
+BRAVE_SEARCH_API_KEY = PersistentConfig(
+    "BRAVE_SEARCH_API_KEY",
+    "rag.web.search.brave_search_api_key",
+    os.getenv("BRAVE_SEARCH_API_KEY", ""),
+)
+
+SERPSTACK_API_KEY = PersistentConfig(
+    "SERPSTACK_API_KEY",
+    "rag.web.search.serpstack_api_key",
+    os.getenv("SERPSTACK_API_KEY", ""),
+)
+
+SERPSTACK_HTTPS = PersistentConfig(
+    "SERPSTACK_HTTPS",
+    "rag.web.search.serpstack_https",
+    os.getenv("SERPSTACK_HTTPS", "True").lower() == "true",
+)
+
+SERPER_API_KEY = PersistentConfig(
+    "SERPER_API_KEY",
+    "rag.web.search.serper_api_key",
+    os.getenv("SERPER_API_KEY", ""),
+)
+
+
+RAG_WEB_SEARCH_RESULT_COUNT = PersistentConfig(
+    "RAG_WEB_SEARCH_RESULT_COUNT",
+    "rag.web.search.result_count",
+    int(os.getenv("RAG_WEB_SEARCH_RESULT_COUNT", "3")),
+)
+
+RAG_WEB_SEARCH_CONCURRENT_REQUESTS = PersistentConfig(
+    "RAG_WEB_SEARCH_CONCURRENT_REQUESTS",
+    "rag.web.search.concurrent_requests",
+    int(os.getenv("RAG_WEB_SEARCH_CONCURRENT_REQUESTS", "10")),
+)
+
 
 ####################################
 # Transcribe
