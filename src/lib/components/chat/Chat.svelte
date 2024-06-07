@@ -19,7 +19,8 @@
 		WEBUI_NAME,
 		banners,
 		user,
-		socket
+		socket,
+		showCallOverlay
 	} from '$lib/stores';
 	import {
 		convertMessagesToHistory,
@@ -57,6 +58,7 @@
 	import Banner from '../common/Banner.svelte';
 	import { getUserSettings } from '$lib/apis/users';
 	import { chatCompleted } from '$lib/apis';
+	import CallOverlay from './MessageInput/CallOverlay.svelte';
 
 	const i18n: Writable<i18nType> = getContext('i18n');
 
@@ -296,6 +298,7 @@
 	//////////////////////////
 
 	const submitPrompt = async (userPrompt, _user = null) => {
+		let _responses = [];
 		console.log('submitPrompt', $chatId);
 
 		selectedModels = selectedModels.map((modelId) =>
@@ -377,11 +380,14 @@
 			files = [];
 
 			// Send prompt
-			await sendPrompt(userPrompt, userMessageId);
+			_responses = await sendPrompt(userPrompt, userMessageId);
 		}
+
+		return _responses;
 	};
 
 	const sendPrompt = async (prompt, parentId, modelId = null) => {
+		let _responses = [];
 		const _chatId = JSON.parse(JSON.stringify($chatId));
 
 		await Promise.all(
@@ -468,11 +474,14 @@
 						await getWebSearchResults(model.id, parentId, responseMessageId);
 					}
 
+					let _response = null;
+
 					if (model?.owned_by === 'openai') {
-						await sendPromptOpenAI(model, prompt, responseMessageId, _chatId);
+						_response = await sendPromptOpenAI(model, prompt, responseMessageId, _chatId);
 					} else if (model) {
-						await sendPromptOllama(model, prompt, responseMessageId, _chatId);
+						_response = await sendPromptOllama(model, prompt, responseMessageId, _chatId);
 					}
+					_responses.push(_response);
 
 					console.log('chatEventEmitter', chatEventEmitter);
 
@@ -484,6 +493,8 @@
 		);
 
 		await chats.set(await getChatList(localStorage.token));
+
+		return _responses;
 	};
 
 	const getWebSearchResults = async (model: string, parentId: string, responseId: string) => {
@@ -558,6 +569,8 @@
 	};
 
 	const sendPromptOllama = async (model, userPrompt, responseMessageId, _chatId) => {
+		let _response = null;
+
 		model = model.id;
 
 		const responseMessage = history.messages[responseMessageId];
@@ -668,6 +681,7 @@
 						await chatCompletedHandler(model, messages);
 					}
 
+					_response = responseMessage.content;
 					break;
 				}
 
@@ -804,9 +818,12 @@
 			const _title = await generateChatTitle(userPrompt);
 			await setChatTitle(_chatId, _title);
 		}
+
+		return _response;
 	};
 
 	const sendPromptOpenAI = async (model, userPrompt, responseMessageId, _chatId) => {
+		let _response = null;
 		const responseMessage = history.messages[responseMessageId];
 
 		const docs = messages
@@ -923,6 +940,8 @@
 							await chatCompletedHandler(model.id, messages);
 						}
 
+						_response = responseMessage.content;
+
 						break;
 					}
 
@@ -998,6 +1017,8 @@
 			const _title = await generateChatTitle(userPrompt);
 			await setChatTitle(_chatId, _title);
 		}
+
+		return _response;
 	};
 
 	const handleOpenAIError = async (error, res: Response | null, model, responseMessage) => {
@@ -1192,6 +1213,8 @@
 			: `${$WEBUI_NAME}`}
 	</title>
 </svelte:head>
+
+<CallOverlay {submitPrompt} />
 
 {#if !chatIdProp || (loaded && chatIdProp)}
 	<div
