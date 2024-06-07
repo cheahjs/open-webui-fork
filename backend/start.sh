@@ -55,7 +55,7 @@ if [ -n "$SPACE_ID" ]; then
   if [ -n "$OAUTH_CLIENT_ID" ]; then
     echo "OAuth client ID provided, configuring for OAuth"
     export OPENID_PROVIDER_URL=${OPENID_PROVIDER_URL}/.well-known/openid-configuration
-    export OPENID_PROVIDER_NAME="Hugging Face"
+    export OAUTH_PROVIDER_NAME="Hugging Face"
   fi
 
   export WEBUI_URL=${SPACE_HOST}
