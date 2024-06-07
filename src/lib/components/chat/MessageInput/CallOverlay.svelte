@@ -2,9 +2,10 @@
 	import { settings, showCallOverlay } from '$lib/stores';
 	import { onMount, tick, getContext } from 'svelte';
 
-	import { blobToFile, calculateSHA256, findWordIndices } from '$lib/utils';
-	import { transcribeAudio } from '$lib/apis/audio';
+	import { blobToFile, calculateSHA256, extractSentences, findWordIndices } from '$lib/utils';
+	import { synthesizeOpenAISpeech, transcribeAudio } from '$lib/apis/audio';
 	import { toast } from 'svelte-sonner';
+	import Tooltip from '$lib/components/common/Tooltip.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -14,7 +15,8 @@
 	let confirmed = false;
 
 	let assistantSpeaking = false;
-	let assistantAudio = null;
+	let assistantAudio = {};
+	let assistantAudioIdx = null;
 
 	let rmsLevel = 0;
 	let hasStartedSpeaking = false;
@@ -26,6 +28,7 @@
 	let animationFrameId;
 
 	let speechRecognition;
+	let currentUtterance = null;
 
 	let mediaRecorder;
 	let audioChunks = [];
@@ -108,14 +111,7 @@
 				// Check if initial speech/noise has started
 				const hasSound = domainData.some((value) => value > 0);
 				if (hasSound) {
-					if (assistantSpeaking) {
-						speechSynthesis.cancel();
-
-						if (assistantAudio) {
-							assistantAudio.pause();
-							assistantAudio.currentTime = 0;
-						}
-					}
+					stopAllAudio();
 					hasStartedSpeaking = true;
 					lastSoundTime = Date.now();
 				}
@@ -140,6 +136,64 @@
 		detectSound();
 	};
 
+	const stopAllAudio = () => {
+		if (currentUtterance) {
+			speechSynthesis.cancel();
+			currentUtterance = null;
+		}
+		if (assistantAudio[assistantAudioIdx]) {
+			assistantAudio[assistantAudioIdx].pause();
+			assistantAudio[assistantAudioIdx].currentTime = 0;
+		}
+
+		const audioElement = document.getElementById('audioElement');
+		audioElement.pause();
+		audioElement.currentTime = 0;
+
+		assistantSpeaking = false;
+	};
+
+	const playAudio = (idx) => {
+		return new Promise((res) => {
+			assistantAudioIdx = idx;
+			const audioElement = document.getElementById('audioElement');
+			const audio = assistantAudio[idx];
+
+			audioElement.src = audio.src; // Assume `assistantAudio` has objects with a `src` property
+			audioElement.play();
+
+			audioElement.onended = async (e) => {
+				await new Promise((r) => setTimeout(r, 300));
+
+				if (Object.keys(assistantAudio).length - 1 === idx) {
+					assistantSpeaking = false;
+				}
+
+				res(e);
+			};
+		});
+	};
+
+	const getOpenAISpeech = async (text) => {
+		const res = await synthesizeOpenAISpeech(
+			localStorage.token,
+			$settings?.audio?.speaker ?? 'alloy',
+			text,
+			$settings?.audio?.model ?? 'tts-1'
+		).catch((error) => {
+			toast.error(error);
+			assistantSpeaking = false;
+			return null;
+		});
+
+		if (res) {
+			const blob = await res.blob();
+			const blobUrl = URL.createObjectURL(blob);
+			const audio = new Audio(blobUrl);
+			assistantAudio = audio;
+		}
+	};
+
 	const transcribeHandler = async (audioBlob) => {
 		// Create a blob from the audio chunks
 
@@ -152,21 +206,70 @@
 		});
 
 		if (res) {
-			toast.success(res.text);
+			console.log(res.text);
 
-			const _responses = await submitPrompt(res.text);
-			console.log(_responses);
+			if (res.text !== '') {
+				const _responses = await submitPrompt(res.text);
+				console.log(_responses);
 
-			if (_responses.at(0)) {
-				const response = _responses[0];
-				if (response) {
-					assistantSpeaking = true;
-
-					if ($settings?.audio?.TTSEngine ?? '') {
-						speechSynthesis.speak(new SpeechSynthesisUtterance(response));
-					} else {
-						console.log('openai');
+				if (_responses.at(0)) {
+					const content = _responses[0];
+					if (content) {
+						assistantSpeakingHandler(content);
 					}
+				}
+			}
+		}
+	};
+
+	const assistantSpeakingHandler = async (content) => {
+		assistantSpeaking = true;
+
+		if (($settings?.audio?.TTSEngine ?? '') == '') {
+			currentUtterance = new SpeechSynthesisUtterance(content);
+			speechSynthesis.speak(currentUtterance);
+		} else if ($settings?.audio?.TTSEngine === 'openai') {
+			console.log('openai');
+
+			const sentences = extractSentences(content).reduce((mergedTexts, currentText) => {
+				const lastIndex = mergedTexts.length - 1;
+				if (lastIndex >= 0) {
+					const previousText = mergedTexts[lastIndex];
+					const wordCount = previousText.split(/\s+/).length;
+					if (wordCount < 2) {
+						mergedTexts[lastIndex] = previousText + ' ' + currentText;
+					} else {
+						mergedTexts.push(currentText);
+					}
+				} else {
+					mergedTexts.push(currentText);
+				}
+				return mergedTexts;
+			}, []);
+
+			console.log(sentences);
+
+			let lastPlayedAudioPromise = Promise.resolve(); // Initialize a promise that resolves immediately
+
+			for (const [idx, sentence] of sentences.entries()) {
+				const res = await synthesizeOpenAISpeech(
+					localStorage.token,
+					$settings?.audio?.speaker,
+					sentence,
+					$settings?.audio?.model
+				).catch((error) => {
+					toast.error(error);
+
+					assistantSpeaking = false;
+					return null;
+				});
+
+				if (res) {
+					const blob = await res.blob();
+					const blobUrl = URL.createObjectURL(blob);
+					const audio = new Audio(blobUrl);
+					assistantAudio[idx] = audio;
+					lastPlayedAudioPromise = lastPlayedAudioPromise.then(() => playAudio(idx));
 				}
 			}
 		}
@@ -220,11 +323,12 @@
 </script>
 
 {#if $showCallOverlay}
+	<audio id="audioElement" src="" style="display: none;" />
 	<div class=" absolute w-full h-full flex z-[999]">
 		<div
 			class="absolute w-full h-full bg-white text-gray-700 dark:bg-black dark:text-gray-300 flex justify-center"
 		>
-			<div class="max-w-lg w-full h-screen flex flex-col justify-between p-6">
+			<div class="max-w-lg w-full h-screen max-h-[100dvh] flex flex-col justify-between p-6">
 				<div>
 					<!-- navbar -->
 				</div>
@@ -282,27 +386,29 @@
 
 				<div class="flex justify-between items-center pb-2 w-full">
 					<div>
-						<button class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke-width="1.5"
-								stroke="currentColor"
-								class="size-5"
-							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
-								/>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"
-								/>
-							</svg>
-						</button>
+						<Tooltip content="WIP 🚧">
+							<button class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900">
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke-width="1.5"
+									stroke="currentColor"
+									class="size-5"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
+									/>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"
+									/>
+								</svg>
+							</button>
+						</Tooltip>
 					</div>
 
 					<div>
@@ -311,7 +417,7 @@
 								{#if loading}
 									Thinking...
 								{:else}
-									Listening... {Math.round(rmsLevel * 100)}
+									Listening...
 								{/if}
 							</div>
 						</button>
