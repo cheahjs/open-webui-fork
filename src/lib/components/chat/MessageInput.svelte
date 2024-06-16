@@ -8,7 +8,9 @@
 		showSidebar,
 		models,
 		config,
-		showCallOverlay
+		showCallOverlay,
+		tools,
+		user as _user
 	} from '$lib/stores';
 	import { blobToFile, calculateSHA256, findWordIndices } from '$lib/utils';
 
@@ -29,6 +31,7 @@
 	import InputMenu from './MessageInput/InputMenu.svelte';
 	import Headphone from '../icons/Headphone.svelte';
 	import VoiceRecording from './MessageInput/VoiceRecording.svelte';
+	import { transcribeAudio } from '$lib/apis/audio';
 
 	const i18n = getContext('i18n');
 
@@ -57,6 +60,8 @@
 
 	export let files = [];
 
+	export let availableToolIds = [];
+	export let selectedToolIds = [];
 	export let webSearchEnabled = false;
 
 	export let prompt = '';
@@ -313,7 +318,7 @@
 
 			<div class="w-full relative">
 				{#if prompt.charAt(0) === '/'}
-					<Prompts bind:this={promptsElement} bind:prompt />
+					<Prompts bind:this={promptsElement} bind:prompt bind:files />
 				{:else if prompt.charAt(0) === '#'}
 					<Documents
 						bind:this={documentsElement}
@@ -343,7 +348,6 @@
 				<Models
 					bind:this={modelsElement}
 					bind:prompt
-					bind:user
 					bind:chatInputPlaceholder
 					{messages}
 					on:select={(e) => {
@@ -462,7 +466,7 @@
 							document.getElementById('chat-textarea')?.focus();
 
 							if ($settings?.speechAutoSend ?? false) {
-								submitPrompt(prompt, user);
+								submitPrompt(prompt);
 							}
 						}}
 					/>
@@ -471,7 +475,7 @@
 						class="w-full flex gap-1.5"
 						on:submit|preventDefault={() => {
 							// check if selectedModels support image input
-							submitPrompt(prompt, user);
+							submitPrompt(prompt);
 						}}
 					>
 						<div
@@ -652,6 +656,17 @@
 								<div class=" ml-0.5 self-end mb-1.5 flex space-x-1">
 									<InputMenu
 										bind:webSearchEnabled
+										bind:selectedToolIds
+										tools={$tools.reduce((a, e, i, arr) => {
+											if (availableToolIds.includes(e.id) || ($_user?.role ?? 'user') === 'admin') {
+												a[e.id] = {
+													name: e.name,
+													description: e.meta.description,
+													enabled: false
+												};
+											}
+											return a;
+										}, {})}
 										uploadFilesHandler={() => {
 											filesInputElement.click();
 										}}
@@ -702,7 +717,7 @@
 
 											// Submit the prompt when Enter key is pressed
 											if (prompt !== '' && e.key === 'Enter' && !e.shiftKey) {
-												submitPrompt(prompt, user);
+												submitPrompt(prompt);
 											}
 										}
 									}}
@@ -855,19 +870,26 @@
 												class=" text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-850 transition rounded-full p-1.5 mr-0.5 self-center"
 												type="button"
 												on:click={async () => {
-													const res = await navigator.mediaDevices
-														.getUserMedia({ audio: true })
-														.catch(function (err) {
-															toast.error(
-																$i18n.t(`Permission denied when accessing microphone: {{error}}`, {
-																	error: err
-																})
-															);
-															return null;
-														});
+													try {
+														const res = await navigator.mediaDevices
+															.getUserMedia({ audio: true })
+															.catch(function (err) {
+																toast.error(
+																	$i18n.t(
+																		`Permission denied when accessing microphone: {{error}}`,
+																		{
+																			error: err
+																		}
+																	)
+																);
+																return null;
+															});
 
-													if (res) {
-														recording = true;
+														if (res) {
+															recording = true;
+														}
+													} catch {
+														toast.error($i18n.t('Permission denied when accessing microphone'));
 													}
 												}}
 											>
@@ -896,11 +918,29 @@
 											<button
 												class=" text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-850 transition rounded-full p-2 self-center"
 												type="button"
-												on:click={() => {
+												on:click={async () => {
 													if (selectedModels.length > 1) {
 														toast.error($i18n.t('Select only one model to call'));
-													} else {
+
+														return;
+													}
+
+													if ($config.audio.stt.engine === 'web') {
+														toast.error(
+															$i18n.t('Call feature is not supported when using Web STT engine')
+														);
+
+														return;
+													}
+													// check if user has access to getUserMedia
+													try {
+														await navigator.mediaDevices.getUserMedia({ audio: true });
+														// If the user grants the permission, proceed to show the call overlay
+
 														showCallOverlay.set(true);
+													} catch (err) {
+														// If the user denies the permission or an error occurs, show an error message
+														toast.error($i18n.t('Permission denied when accessing media devices'));
 													}
 												}}
 											>

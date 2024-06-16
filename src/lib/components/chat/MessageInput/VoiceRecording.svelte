@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 	import { createEventDispatcher, tick, getContext } from 'svelte';
-	import { settings } from '$lib/stores';
+	import { config, settings } from '$lib/stores';
 	import { blobToFile, calculateSHA256, findWordIndices } from '$lib/utils';
 
 	import { transcribeAudio } from '$lib/apis/audio';
@@ -169,7 +169,7 @@
 		mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
 		mediaRecorder.onstop = async () => {
 			console.log('Recording stopped');
-			if (($settings?.audio?.STTEngine ?? '') === 'web') {
+			if (($settings?.audio?.stt?.engine ?? '') === 'web') {
 				audioChunks = [];
 			} else {
 				if (confirmed) {
@@ -185,8 +185,7 @@
 			}
 		};
 		mediaRecorder.start();
-
-		if (($settings?.audio?.STTEngine ?? '') === 'web') {
+		if ($config.audio.stt.engine === 'web' || ($settings?.audio?.stt?.engine ?? '') === 'web') {
 			if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
 				// Create a SpeechRecognition object
 				speechRecognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
@@ -195,7 +194,7 @@
 				speechRecognition.continuous = true;
 
 				// Set the timeout for turning off the recognition after inactivity (in milliseconds)
-				const inactivityTimeout = 3000; // 3 seconds
+				const inactivityTimeout = 2000; // 3 seconds
 
 				let timeoutId;
 				// Start recognition
