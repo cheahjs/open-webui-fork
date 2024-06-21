@@ -26,6 +26,7 @@ class User(Model):
 
     api_key = CharField(null=True, unique=True)
     settings = JSONField(null=True)
+    info = JSONField(null=True)
 
     oauth_sub = TextField(null=True, unique=True)
 
@@ -52,6 +53,7 @@ class UserModel(BaseModel):
 
     api_key: Optional[str] = None
     settings: Optional[UserSettings] = None
+    info: Optional[dict] = None
 
     oauth_sub: Optional[str] = None
 
@@ -120,16 +122,9 @@ class UsersTable:
         except:
             return None
 
-    def get_user_by_email(
-        self, email: str, oauth_user: bool = False
-    ) -> Optional[UserModel]:
+    def get_user_by_email(self, email: str) -> Optional[UserModel]:
         try:
-            conditions = (
-                (User.email == email, User.oauth_sub.is_null())
-                if not oauth_user
-                else (User.email == email)
-            )
-            user = User.get(conditions)
+            user = User.get(User.email == email)
             return UserModel(**model_to_dict(user))
         except:
             return None
