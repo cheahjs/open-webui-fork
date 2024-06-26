@@ -191,10 +191,6 @@
 
 				if (Object.keys(sentencesAudio).length - 1 === idx) {
 					speaking = null;
-
-					if ($settings.conversationMode) {
-						document.getElementById('voice-input-button')?.click();
-					}
 				}
 
 				res(e);
@@ -305,7 +301,7 @@
 					}, 100);
 				}
 			} else {
-				toast.error('No content to speak');
+				toast.error($i18n.t('No content to speak'));
 			}
 		}
 	};

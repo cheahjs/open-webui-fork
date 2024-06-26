@@ -3,8 +3,10 @@
 	import { createNewTool, getTools } from '$lib/apis/tools';
 	import ToolkitEditor from '$lib/components/workspace/Tools/ToolkitEditor.svelte';
 	import { tools } from '$lib/stores';
-	import { onMount } from 'svelte';
+	import { onMount, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
+
+	const i18n = getContext('i18n');
 
 	let mounted = false;
 	let clone = false;
@@ -23,7 +25,7 @@
 		});
 
 		if (res) {
-			toast.success('Tool created successfully');
+			toast.success($i18n.t('Tool created successfully'));
 			tools.set(await getTools(localStorage.token));
 
 			await goto('/workspace/tools');
@@ -31,6 +33,18 @@
 	};
 
 	onMount(() => {
+		window.addEventListener('message', async (event) => {
+			if (
+				!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'].includes(
+					event.origin
+				)
+			)
+				return;
+
+			tool = JSON.parse(event.data);
+			console.log(tool);
+		});
+
 		if (sessionStorage.tool) {
 			tool = JSON.parse(sessionStorage.tool);
 			sessionStorage.removeItem('tool');

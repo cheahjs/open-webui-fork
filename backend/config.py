@@ -168,6 +168,12 @@ CHANGELOG = changelog_json
 
 
 ####################################
+# SAFE_MODE
+####################################
+
+SAFE_MODE = os.environ.get("SAFE_MODE", "false").lower() == "true"
+
+####################################
 # WEBUI_BUILD_HASH
 ####################################
 
@@ -1162,6 +1168,11 @@ AUTOMATIC1111_BASE_URL = PersistentConfig(
     "AUTOMATIC1111_BASE_URL",
     "image_generation.automatic1111.base_url",
     os.getenv("AUTOMATIC1111_BASE_URL", ""),
+)
+AUTOMATIC1111_API_AUTH = PersistentConfig(
+    "AUTOMATIC1111_API_AUTH",
+    "image_generation.automatic1111.api_auth",
+    os.getenv("AUTOMATIC1111_API_AUTH", ""),
 )
 
 COMFYUI_BASE_URL = PersistentConfig(

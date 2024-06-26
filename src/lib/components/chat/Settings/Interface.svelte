@@ -32,6 +32,7 @@
 	let chatDirection: 'LTR' | 'RTL' = 'LTR';
 
 	let showEmojiInCall = false;
+	let voiceInterruption = false;
 
 	const toggleSplitLargeChunks = async () => {
 		splitLargeChunks = !splitLargeChunks;
@@ -58,6 +59,11 @@
 		saveSettings({ showEmojiInCall: showEmojiInCall });
 	};
 
+	const toggleVoiceInterruption = async () => {
+		voiceInterruption = !voiceInterruption;
+		saveSettings({ voiceInterruption: voiceInterruption });
+	};
+
 	const toggleUserLocation = async () => {
 		userLocation = !userLocation;
 
@@ -69,7 +75,7 @@
 
 			if (position) {
 				await updateUserInfo(localStorage.token, { location: position });
-				toast.success('User location successfully retrieved.');
+				toast.success($i18n.t('User location successfully retrieved.'));
 			} else {
 				userLocation = false;
 			}
@@ -105,7 +111,9 @@
 			saveSettings({ responseAutoCopy: responseAutoCopy });
 		} else {
 			toast.error(
-				'Clipboard write permission denied. Please check your browser settings to grant the necessary access.'
+				$i18n.t(
+					'Clipboard write permission denied. Please check your browser settings to grant the necessary access.'
+				)
 			);
 		}
 	};
@@ -128,6 +136,7 @@
 		showUsername = $settings.showUsername ?? false;
 
 		showEmojiInCall = $settings.showEmojiInCall ?? false;
+		voiceInterruption = $settings.voiceInterruption ?? false;
 
 		chatBubble = $settings.chatBubble ?? true;
 		widescreenMode = $settings.widescreenMode ?? false;
@@ -398,6 +407,26 @@
 			</div>
 
 			<div class=" my-1.5 text-sm font-medium">{$i18n.t('Voice')}</div>
+
+			<div>
+				<div class=" py-0.5 flex w-full justify-between">
+					<div class=" self-center text-xs">{$i18n.t('Allow Voice Interruption in Call')}</div>
+
+					<button
+						class="p-1 px-3 text-xs flex rounded transition"
+						on:click={() => {
+							toggleVoiceInterruption();
+						}}
+						type="button"
+					>
+						{#if voiceInterruption === true}
+							<span class="ml-2 self-center">{$i18n.t('On')}</span>
+						{:else}
+							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
+						{/if}
+					</button>
+				</div>
+			</div>
 
 			<div>
 				<div class=" py-0.5 flex w-full justify-between">

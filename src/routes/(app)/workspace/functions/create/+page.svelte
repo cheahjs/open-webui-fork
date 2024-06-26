@@ -1,12 +1,14 @@
 <script>
 	import { toast } from 'svelte-sonner';
-	import { onMount } from 'svelte';
+	import { onMount, getContext } from 'svelte';
 	import { goto } from '$app/navigation';
 
 	import { functions, models } from '$lib/stores';
 	import { createNewFunction, getFunctions } from '$lib/apis/functions';
 	import FunctionEditor from '$lib/components/workspace/Functions/FunctionEditor.svelte';
 	import { getModels } from '$lib/apis';
+
+	const i18n = getContext('i18n');
 
 	let mounted = false;
 	let clone = false;
@@ -25,7 +27,7 @@
 		});
 
 		if (res) {
-			toast.success('Function created successfully');
+			toast.success($i18n.t('Function created successfully'));
 			functions.set(await getFunctions(localStorage.token));
 			models.set(await getModels(localStorage.token));
 
@@ -34,6 +36,18 @@
 	};
 
 	onMount(() => {
+		window.addEventListener('message', async (event) => {
+			if (
+				!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'].includes(
+					event.origin
+				)
+			)
+				return;
+
+			func = JSON.parse(event.data);
+			console.log(func);
+		});
+
 		if (sessionStorage.function) {
 			func = JSON.parse(sessionStorage.function);
 			sessionStorage.removeItem('function');
