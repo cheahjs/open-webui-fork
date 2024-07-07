@@ -15,6 +15,9 @@ jobs:
     name: Run Cypress Integration Tests
     runs-on: ubuntu-latest
     steps:
+      - name: Collect Workflow Telemetry
+        uses: catchpoint/workflow-telemetry-action@v2
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -121,6 +124,9 @@ jobs:
     #        ports:
     #          - 3306:3306
     steps:
+      - name: Collect Workflow Telemetry
+        uses: catchpoint/workflow-telemetry-action@v2
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 
