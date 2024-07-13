@@ -37,6 +37,7 @@
 	import CitationsModal from '$lib/components/chat/Messages/CitationsModal.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import WebSearchResults from './ResponseMessage/WebSearchResults.svelte';
+	import Sparkles from '$lib/components/icons/Sparkles.svelte';
 
 	export let message;
 	export let siblings;
@@ -54,6 +55,7 @@
 	export let copyToClipboard: Function;
 	export let continueGeneration: Function;
 	export let regenerateResponse: Function;
+	export let chatActionHandler: Function;
 
 	let model = null;
 	$: model = $models.find((m) => m.id === message.model);
@@ -152,7 +154,10 @@
 			}
 			tooltipInstance = tippy(`#info-${message.id}`, {
 				content: `<span class="text-xs" id="tooltip-${message.id}">${tooltipContent}</span>`,
-				allowHTML: true
+				allowHTML: true,
+				theme: 'dark',
+				arrow: false,
+				offset: [0, 4]
 			});
 		}
 	};
@@ -1017,6 +1022,22 @@
 														</svg>
 													</button>
 												</Tooltip>
+
+												{#each model?.actions ?? [] as action}
+													<Tooltip content={action.name} placement="bottom">
+														<button
+															type="button"
+															class="{isLastMessage
+																? 'visible'
+																: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition regenerate-response-button"
+															on:click={() => {
+																dispatch('action', action.id);
+															}}
+														>
+															<Sparkles strokeWidth="2.1" className="size-4" />
+														</button>
+													</Tooltip>
+												{/each}
 											{/if}
 										{/if}
 									{/if}

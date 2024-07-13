@@ -122,12 +122,17 @@
 
 		if (res) {
 			if (func.is_global) {
-				toast.success($i18n.t('Filter is now globally enabled'));
+				func.type === 'filter'
+					? toast.success($i18n.t('Filter is now globally enabled'))
+					: toast.success($i18n.t('Function is now globally enabled'));
 			} else {
-				toast.success($i18n.t('Filter is now globally disabled'));
+				func.type === 'filter'
+					? toast.success($i18n.t('Filter is now globally disabled'))
+					: toast.success($i18n.t('Function is now globally disabled'));
 			}
 
 			functions.set(await getFunctions(localStorage.token));
+			models.set(await getModels(localStorage.token));
 		}
 	};
 </script>
@@ -200,14 +205,14 @@
 					<div class=" flex-1 self-center pl-1">
 						<div class=" font-semibold flex items-center gap-1.5">
 							<div
-								class=" text-xs font-black px-1 rounded uppercase line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200"
+								class=" text-xs font-bold px-1 rounded uppercase line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200"
 							>
 								{func.type}
 							</div>
 
 							{#if func?.meta?.manifest?.version}
 								<div
-									class="text-xs font-black px-1 rounded line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200"
+									class="text-xs font-bold px-1 rounded line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200"
 								>
 									v{func?.meta?.manifest?.version ?? ''}
 								</div>
@@ -294,7 +299,7 @@
 						showDeleteConfirm = true;
 					}}
 					toggleGlobalHandler={() => {
-						if (func.type === 'filter') {
+						if (['filter', 'action'].includes(func.type)) {
 							toggleGlobalHandler(func);
 						}
 					}}
@@ -430,7 +435,7 @@
 		</div>
 
 		<div class=" self-center">
-			<div class=" font-bold line-clamp-1">{$i18n.t('Discover a function')}</div>
+			<div class=" font-semibold line-clamp-1">{$i18n.t('Discover a function')}</div>
 			<div class=" text-sm line-clamp-1">
 				{$i18n.t('Discover, download, and explore custom functions')}
 			</div>
