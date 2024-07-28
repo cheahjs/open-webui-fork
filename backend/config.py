@@ -77,6 +77,16 @@ for source in log_sources:
 
 log.setLevel(SRC_LOG_LEVELS["CONFIG"])
 
+
+class EndpointFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.getMessage().find("/health") == -1
+
+
+# Filter out /endpoint
+logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+
+
 WEBUI_NAME = os.environ.get("WEBUI_NAME", "Open WebUI")
 if WEBUI_NAME != "Open WebUI":
     WEBUI_NAME += " (Open WebUI)"
@@ -709,6 +719,12 @@ ENABLE_SIGNUP = PersistentConfig(
     ),
 )
 
+ENABLE_LOGIN_FORM = PersistentConfig(
+    "ENABLE_LOGIN_FORM",
+    "ui.ENABLE_LOGIN_FORM",
+    os.environ.get("ENABLE_LOGIN_FORM", "True").lower() == "true",
+)
+
 DEFAULT_LOCALE = PersistentConfig(
     "DEFAULT_LOCALE",
     "ui.default_locale",
@@ -1329,6 +1345,11 @@ AUDIO_TTS_OPENAI_API_KEY = PersistentConfig(
     os.getenv("AUDIO_TTS_OPENAI_API_KEY", OPENAI_API_KEY),
 )
 
+AUDIO_TTS_API_KEY = PersistentConfig(
+    "AUDIO_TTS_API_KEY",
+    "audio.tts.api_key",
+    os.getenv("AUDIO_TTS_API_KEY", ""),
+)
 
 AUDIO_TTS_ENGINE = PersistentConfig(
     "AUDIO_TTS_ENGINE",

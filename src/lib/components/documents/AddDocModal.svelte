@@ -16,6 +16,7 @@
 	const i18n = getContext('i18n');
 
 	export let show = false;
+	export let uploadDoc: Function;
 	let uploadDocInputElement: HTMLInputElement;
 	let inputFiles;
 	let tags = [];
@@ -26,32 +27,6 @@
 		content: null
 	};
 
-	const uploadDoc = async (file) => {
-		const res = await uploadDocToVectorDB(localStorage.token, '', file).catch((error) => {
-			toast.error(error);
-			return null;
-		});
-
-		if (res) {
-			await createNewDoc(
-				localStorage.token,
-				res.collection_name,
-				res.filename,
-				transformFileName(res.filename),
-				res.filename,
-				tags.length > 0
-					? {
-							tags: tags
-					  }
-					: null
-			).catch((error) => {
-				toast.error(error);
-				return null;
-			});
-			await documents.set(await getDocs(localStorage.token));
-		}
-	};
-
 	const submitHandler = async () => {
 		if (inputFiles && inputFiles.length > 0) {
 			for (const file of inputFiles) {
@@ -60,12 +35,12 @@
 					SUPPORTED_FILE_TYPE.includes(file['type']) ||
 					SUPPORTED_FILE_EXTENSIONS.includes(file.name.split('.').at(-1))
 				) {
-					uploadDoc(file);
+					uploadDoc(file, tags);
 				} else {
 					toast.error(
 						`Unknown File Type '${file['type']}', but accepting and treating as plain text`
 					);
-					uploadDoc(file);
+					uploadDoc(file, tags);
 				}
 			}
 

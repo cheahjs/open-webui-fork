@@ -80,6 +80,7 @@
 	let eventConfirmationMessage = '';
 	let eventConfirmationInput = false;
 	let eventConfirmationInputPlaceholder = '';
+	let eventConfirmationInputValue = '';
 	let eventCallback = null;
 
 	let showModelSelector = true;
@@ -98,6 +99,8 @@
 
 	let title = '';
 	let prompt = '';
+
+	let chatFiles = [];
 	let files = [];
 	let messages = [];
 	let history = {
@@ -161,8 +164,8 @@
 				}
 			} else if (type === 'message') {
 				message.content += data.content;
-		  } else if (type === 'replace') {
-		    message.content = data.content;
+			} else if (type === 'replace') {
+				message.content = data.content;
 			} else if (type === 'confirmation') {
 				eventCallback = cb;
 
@@ -180,6 +183,7 @@
 				eventConfirmationTitle = data.title;
 				eventConfirmationMessage = data.message;
 				eventConfirmationInputPlaceholder = data.placeholder;
+				eventConfirmationInputValue = data?.value ?? '';
 			} else {
 				console.log('Unknown message type', data);
 			}
@@ -262,6 +266,8 @@
 			messages: {},
 			currentId: null
 		};
+
+		chatFiles = [];
 		params = {};
 
 		if ($page.url.searchParams.get('models')) {
@@ -333,6 +339,7 @@
 				}
 
 				params = chatContent?.params ?? {};
+				chatFiles = chatContent?.files ?? [];
 
 				autoScroll = true;
 				await tick();
@@ -408,7 +415,8 @@
 					models: selectedModels,
 					messages: messages,
 					history: history,
-					params: params
+					params: params,
+					files: chatFiles
 				});
 				await chats.set(await getChatList(localStorage.token));
 			}
@@ -453,7 +461,8 @@
 					models: selectedModels,
 					messages: messages,
 					history: history,
-					params: params
+					params: params,
+					files: chatFiles
 				});
 				await chats.set(await getChatList(localStorage.token));
 			}
@@ -514,6 +523,13 @@
 			}
 
 			const _files = JSON.parse(JSON.stringify(files));
+			chatFiles.push(..._files.filter((item) => ['doc', 'file', 'collection'].includes(item.type)));
+			chatFiles = chatFiles.filter(
+				// Remove duplicates
+				(item, index, array) =>
+					array.findIndex((i) => JSON.stringify(i) === JSON.stringify(item)) === index
+			);
+
 			files = [];
 
 			prompt = '';
@@ -692,6 +708,7 @@
 		let _response = null;
 
 		const responseMessage = history.messages[responseMessageId];
+		const userMessage = history.messages[responseMessage.parentId];
 
 		// Wait until history/message have been updated
 		await tick();
@@ -754,24 +771,15 @@
 			}
 		});
 
-		let files = [];
+		let files = JSON.parse(JSON.stringify(chatFiles));
 		if (model?.info?.meta?.knowledge ?? false) {
-			files = model.info.meta.knowledge;
+			files.push(...model.info.meta.knowledge);
 		}
-		const lastUserMessage = messages.filter((message) => message.role === 'user').at(-1);
-
-		files = [
-			...files,
-			...(lastUserMessage?.files?.filter((item) =>
-				['doc', 'file', 'collection', 'web_search_results'].includes(item.type)
-			) ?? []),
-			...(responseMessage?.files?.filter((item) =>
-				['doc', 'file', 'collection', 'web_search_results'].includes(item.type)
-			) ?? [])
-		].filter(
-			// Remove duplicates
-			(item, index, array) =>
-				array.findIndex((i) => JSON.stringify(i) === JSON.stringify(item)) === index
+		files.push(
+			...(userMessage?.files ?? []).filter((item) =>
+				['doc', 'file', 'collection'].includes(item.type)
+			),
+			...(responseMessage?.files ?? []).filter((item) => ['web_search_results'].includes(item.type))
 		);
 
 		eventTarget.dispatchEvent(
@@ -804,6 +812,7 @@
 			keep_alive: $settings.keepAlive ?? undefined,
 			tool_ids: selectedToolIds.length > 0 ? selectedToolIds : undefined,
 			files: files.length > 0 ? files : undefined,
+			...(Object.keys(valves).length ? { valves } : {}),
 			session_id: $socket?.id,
 			chat_id: $chatId,
 			id: responseMessageId
@@ -935,7 +944,8 @@
 						messages: messages,
 						history: history,
 						models: selectedModels,
-						params: params
+						params: params,
+						files: chatFiles
 					});
 					await chats.set(await getChatList(localStorage.token));
 				}
@@ -989,7 +999,7 @@
 			scrollToBottom();
 		}
 
-		if (messages.length == 2 && messages.at(1).content !== '') {
+		if (messages.length == 2 && messages.at(1).content !== '' && selectedModels[0] === model.id) {
 			window.history.replaceState(history.state, '', `/c/${_chatId}`);
 			const _title = await generateChatTitle(userPrompt);
 			await setChatTitle(_chatId, _title);
@@ -1000,25 +1010,19 @@
 
 	const sendPromptOpenAI = async (model, userPrompt, responseMessageId, _chatId) => {
 		let _response = null;
-		const responseMessage = history.messages[responseMessageId];
 
-		let files = [];
+		const responseMessage = history.messages[responseMessageId];
+		const userMessage = history.messages[responseMessage.parentId];
+
+		let files = JSON.parse(JSON.stringify(chatFiles));
 		if (model?.info?.meta?.knowledge ?? false) {
-			files = model.info.meta.knowledge;
+			files.push(...model.info.meta.knowledge);
 		}
-		const lastUserMessage = messages.filter((message) => message.role === 'user').at(-1);
-		files = [
-			...files,
-			...(lastUserMessage?.files?.filter((item) =>
-				['doc', 'file', 'collection', 'web_search_results'].includes(item.type)
-			) ?? []),
-			...(responseMessage?.files?.filter((item) =>
-				['doc', 'file', 'collection', 'web_search_results'].includes(item.type)
-			) ?? [])
-		].filter(
-			// Remove duplicates
-			(item, index, array) =>
-				array.findIndex((i) => JSON.stringify(i) === JSON.stringify(item)) === index
+		files.push(
+			...(userMessage?.files ?? []).filter((item) =>
+				['doc', 'file', 'collection'].includes(item.type)
+			),
+			...(responseMessage?.files ?? []).filter((item) => ['web_search_results'].includes(item.type))
 		);
 
 		scrollToBottom();
@@ -1108,6 +1112,7 @@
 					max_tokens: params?.max_tokens ?? $settings?.params?.max_tokens ?? undefined,
 					tool_ids: selectedToolIds.length > 0 ? selectedToolIds : undefined,
 					files: files.length > 0 ? files : undefined,
+					...(Object.keys(valves).length ? { valves } : {}),
 					session_id: $socket?.id,
 					chat_id: $chatId,
 					id: responseMessageId
@@ -1212,7 +1217,8 @@
 							models: selectedModels,
 							messages: messages,
 							history: history,
-							params: params
+							params: params,
+							files: chatFiles
 						});
 						await chats.set(await getChatList(localStorage.token));
 					}
@@ -1250,7 +1256,7 @@
 			scrollToBottom();
 		}
 
-		if (messages.length == 2) {
+		if (messages.length == 2 && selectedModels[0] === model.id) {
 			window.history.replaceState(history.state, '', `/c/${_chatId}`);
 
 			const _title = await generateChatTitle(userPrompt);
@@ -1485,6 +1491,7 @@
 	message={eventConfirmationMessage}
 	input={eventConfirmationInput}
 	inputPlaceholder={eventConfirmationInputPlaceholder}
+	inputValue={eventConfirmationInputValue}
 	on:confirm={(e) => {
 		if (e.detail) {
 			eventCallback(e.detail);
@@ -1630,6 +1637,7 @@
 				return a;
 			}, [])}
 			bind:show={showControls}
+			bind:chatFiles
 			bind:params
 			bind:valves
 		/>

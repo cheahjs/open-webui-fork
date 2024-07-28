@@ -35,6 +35,7 @@ from config import (
     DEFAULT_PROMPT_SUGGESTIONS,
     DEFAULT_USER_ROLE,
     ENABLE_SIGNUP,
+    ENABLE_LOGIN_FORM,
     USER_PERMISSIONS,
     WEBHOOK_URL,
     WEBUI_AUTH_TRUSTED_EMAIL_HEADER,
@@ -55,7 +56,7 @@ import uuid
 import time
 import json
 
-from typing import Iterator, Generator, Optional
+from typing import Iterator, Generator, AsyncGenerator, Optional
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -65,6 +66,7 @@ origins = ["*"]
 app.state.config = AppConfig()
 
 app.state.config.ENABLE_SIGNUP = ENABLE_SIGNUP
+app.state.config.ENABLE_LOGIN_FORM = ENABLE_LOGIN_FORM
 app.state.config.JWT_EXPIRES_IN = JWT_EXPIRES_IN
 app.state.AUTH_TRUSTED_EMAIL_HEADER = WEBUI_AUTH_TRUSTED_EMAIL_HEADER
 app.state.AUTH_TRUSTED_NAME_HEADER = WEBUI_AUTH_TRUSTED_NAME_HEADER
@@ -412,6 +414,25 @@ async def generate_function_chat_completion(form_data, user):
                     yield f"data: {json.dumps(finish_message)}\n\n"
                     yield f"data: [DONE]"
 
+                if isinstance(res, AsyncGenerator):
+                    async for line in res:
+                        if isinstance(line, BaseModel):
+                            line = line.model_dump_json()
+                            line = f"data: {line}"
+                        if isinstance(line, dict):
+                            line = f"data: {json.dumps(line)}"
+
+                        try:
+                            line = line.decode("utf-8")
+                        except:
+                            pass
+
+                        if line.startswith("data:"):
+                            yield f"{line}\n\n"
+                        else:
+                            line = stream_message_template(form_data["model"], line)
+                            yield f"data: {json.dumps(line)}\n\n"
+
             return StreamingResponse(stream_content(), media_type="text/event-stream")
         else:
 
@@ -435,8 +456,11 @@ async def generate_function_chat_completion(form_data, user):
                 message = ""
                 if isinstance(res, str):
                     message = res
-                if isinstance(res, Generator):
+                elif isinstance(res, Generator):
                     for stream in res:
+                        message = f"{message}{stream}"
+                elif isinstance(res, AsyncGenerator):
+                    async for stream in res:
                         message = f"{message}{stream}"
 
                 return {

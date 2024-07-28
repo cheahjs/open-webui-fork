@@ -175,7 +175,10 @@
 					delimiters: [
 						{ left: '$$', right: '$$', display: false },
 						{ left: '$ ', right: ' $', display: false },
+						{ left: '\\pu{', right: '}', display: false },
+						{ left: '\\ce{', right: '}', display: false },
 						{ left: '\\(', right: '\\)', display: false },
+						{ left: '( ', right: ' )', display: false },
 						{ left: '\\[', right: '\\]', display: false },
 						{ left: '[ ', right: ' ]', display: false }
 					],
@@ -218,7 +221,7 @@
 			if ((message?.content ?? '').trim() !== '') {
 				speaking = true;
 
-				if ($config.audio.tts.engine === 'openai') {
+				if ($config.audio.tts.engine !== '') {
 					loadingSpeech = true;
 
 					const sentences = extractSentences(message.content).reduce((mergedTexts, currentText) => {
@@ -566,6 +569,11 @@
 											const metadata = citation.metadata?.[index];
 											const id = metadata?.source ?? 'N/A';
 											let source = citation?.source;
+
+											if (metadata?.name) {
+												source = { ...source, name: metadata.name };
+											}
+
 											// Check if ID looks like a URL
 											if (id.startsWith('http://') || id.startsWith('https://')) {
 												source = { name: id };
@@ -1034,7 +1042,18 @@
 																dispatch('action', action.id);
 															}}
 														>
-															<Sparkles strokeWidth="2.1" className="size-4" />
+															{#if action.icon_url}
+																<img
+																	src={action.icon_url}
+																	class="w-4 h-4 {action.icon_url.includes('svg')
+																		? 'dark:invert-[80%]'
+																		: ''}"
+																	style="fill: currentColor;"
+																	alt={action.name}
+																/>
+															{:else}
+																<Sparkles strokeWidth="2.1" className="size-4" />
+															{/if}
 														</button>
 													</Tooltip>
 												{/each}
