@@ -13,8 +13,6 @@ import aiohttp
 import requests
 import mimetypes
 import shutil
-import os
-import uuid
 import inspect
 
 from fastapi import FastAPI, Request, Depends, status, UploadFile, File, Form
@@ -29,7 +27,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import StreamingResponse, Response, RedirectResponse
 
 
-from apps.socket.main import sio, app as socket_app, get_event_emitter, get_event_call
+from apps.socket.main import app as socket_app, get_event_emitter, get_event_call
 from apps.ollama.main import (
     app as ollama_app,
     get_all_models as get_ollama_models,
@@ -619,32 +617,15 @@ class ChatCompletionMiddleware(BaseHTTPMiddleware):
                     content={"detail": str(e)},
                 )
 
-            # Extract valves from the request body
-            valves = None
-            if "valves" in body:
-                valves = body["valves"]
-                del body["valves"]
+            metadata = {
+                "chat_id": body.pop("chat_id", None),
+                "message_id": body.pop("id", None),
+                "session_id": body.pop("session_id", None),
+                "valves": body.pop("valves", None),
+            }
 
-            # Extract session_id, chat_id and message_id from the request body
-            session_id = None
-            if "session_id" in body:
-                session_id = body["session_id"]
-                del body["session_id"]
-            chat_id = None
-            if "chat_id" in body:
-                chat_id = body["chat_id"]
-                del body["chat_id"]
-            message_id = None
-            if "id" in body:
-                message_id = body["id"]
-                del body["id"]
-
-            __event_emitter__ = await get_event_emitter(
-                {"chat_id": chat_id, "message_id": message_id, "session_id": session_id}
-            )
-            __event_call__ = await get_event_call(
-                {"chat_id": chat_id, "message_id": message_id, "session_id": session_id}
-            )
+            __event_emitter__ = get_event_emitter(metadata)
+            __event_call__ = get_event_call(metadata)
 
             # Initialize data_items to store additional data to be sent to the client
             data_items = []
@@ -709,13 +690,7 @@ class ChatCompletionMiddleware(BaseHTTPMiddleware):
             if len(citations) > 0:
                 data_items.append({"citations": citations})
 
-            body["metadata"] = {
-                "session_id": session_id,
-                "chat_id": chat_id,
-                "message_id": message_id,
-                "valves": valves,
-            }
-
+            body["metadata"] = metadata
             modified_body_bytes = json.dumps(body).encode("utf-8")
             # Replace the request body with the modified one
             request._body = modified_body_bytes
@@ -1043,14 +1018,39 @@ async def get_all_models():
         model["actions"] = []
         for action_id in action_ids:
             action = Functions.get_function_by_id(action_id)
-            model["actions"].append(
-                {
-                    "id": action_id,
-                    "name": action.name,
-                    "description": action.meta.description,
-                    "icon_url": action.meta.manifest.get("icon_url", None),
-                }
-            )
+
+            if action_id in webui_app.state.FUNCTIONS:
+                function_module = webui_app.state.FUNCTIONS[action_id]
+            else:
+                function_module, _, _ = load_function_module_by_id(action_id)
+                webui_app.state.FUNCTIONS[action_id] = function_module
+
+            if hasattr(function_module, "actions"):
+                actions = function_module.actions
+                model["actions"].extend(
+                    [
+                        {
+                            "id": f"{action_id}.{_action['id']}",
+                            "name": _action.get(
+                                "name", f"{action.name} ({_action['id']})"
+                            ),
+                            "description": action.meta.description,
+                            "icon_url": _action.get(
+                                "icon_url", action.meta.manifest.get("icon_url", None)
+                            ),
+                        }
+                        for _action in actions
+                    ]
+                )
+            else:
+                model["actions"].append(
+                    {
+                        "id": action_id,
+                        "name": action.name,
+                        "description": action.meta.description,
+                        "icon_url": action.meta.manifest.get("icon_url", None),
+                    }
+                )
 
     app.state.MODELS = {model["id"]: model for model in models}
     webui_app.state.MODELS = app.state.MODELS
@@ -1166,13 +1166,13 @@ async def chat_completed(form_data: dict, user=Depends(get_verified_user)):
                             status_code=r.status_code,
                             content=res,
                         )
-                except:
+                except Exception:
                     pass
 
             else:
                 pass
 
-    __event_emitter__ = await get_event_emitter(
+    __event_emitter__ = get_event_emitter(
         {
             "chat_id": data["chat_id"],
             "message_id": data["id"],
@@ -1180,7 +1180,7 @@ async def chat_completed(form_data: dict, user=Depends(get_verified_user)):
         }
     )
 
-    __event_call__ = await get_event_call(
+    __event_call__ = get_event_call(
         {
             "chat_id": data["chat_id"],
             "message_id": data["id"],
@@ -1285,9 +1285,12 @@ async def chat_completed(form_data: dict, user=Depends(get_verified_user)):
 
 
 @app.post("/api/chat/actions/{action_id}")
-async def chat_completed(
-    action_id: str, form_data: dict, user=Depends(get_verified_user)
-):
+async def chat_action(action_id: str, form_data: dict, user=Depends(get_verified_user)):
+    if "." in action_id:
+        action_id, sub_action_id = action_id.split(".")
+    else:
+        sub_action_id = None
+
     action = Functions.get_function_by_id(action_id)
     if not action:
         raise HTTPException(
@@ -1304,14 +1307,14 @@ async def chat_completed(
         )
     model = app.state.MODELS[model_id]
 
-    __event_emitter__ = await get_event_emitter(
+    __event_emitter__ = get_event_emitter(
         {
             "chat_id": data["chat_id"],
             "message_id": data["id"],
             "session_id": data["session_id"],
         }
     )
-    __event_call__ = await get_event_call(
+    __event_call__ = get_event_call(
         {
             "chat_id": data["chat_id"],
             "message_id": data["id"],
@@ -1340,7 +1343,7 @@ async def chat_completed(
             # Extra parameters to be passed to the function
             extra_params = {
                 "__model__": model,
-                "__id__": action_id,
+                "__id__": sub_action_id if sub_action_id is not None else action_id,
                 "__event_emitter__": __event_emitter__,
                 "__event_call__": __event_call__,
             }
@@ -1740,7 +1743,6 @@ class AddPipelineForm(BaseModel):
 
 @app.post("/api/pipelines/add")
 async def add_pipeline(form_data: AddPipelineForm, user=Depends(get_admin_user)):
-
     r = None
     try:
         urlIdx = form_data.urlIdx
@@ -1783,7 +1785,6 @@ class DeletePipelineForm(BaseModel):
 
 @app.delete("/api/pipelines/delete")
 async def delete_pipeline(form_data: DeletePipelineForm, user=Depends(get_admin_user)):
-
     r = None
     try:
         urlIdx = form_data.urlIdx
@@ -1861,7 +1862,6 @@ async def get_pipeline_valves(
     models = await get_all_models()
     r = None
     try:
-
         url = openai_app.state.config.OPENAI_API_BASE_URLS[urlIdx]
         key = openai_app.state.config.OPENAI_API_KEYS[urlIdx]
 
@@ -2113,6 +2113,7 @@ for provider_name, provider_config in OAUTH_PROVIDERS.items():
         client_kwargs={
             "scope": provider_config["scope"],
         },
+        redirect_uri=provider_config["redirect_uri"],
     )
 
 # SessionMiddleware is used by authlib for oauth
@@ -2130,7 +2131,10 @@ if len(OAUTH_PROVIDERS) > 0:
 async def oauth_login(provider: str, request: Request):
     if provider not in OAUTH_PROVIDERS:
         raise HTTPException(404)
-    redirect_uri = request.url_for("oauth_callback", provider=provider)
+    # If the provider has a custom redirect URL, use that, otherwise automatically generate one
+    redirect_uri = OAUTH_PROVIDERS[provider].get("redirect_uri") or request.url_for(
+        "oauth_callback", provider=provider
+    )
     return await oauth.create_client(provider).authorize_redirect(request, redirect_uri)
 
 
