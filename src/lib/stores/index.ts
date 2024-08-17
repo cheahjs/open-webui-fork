@@ -42,6 +42,10 @@ export const showArchivedChats = writable(false);
 export const showChangelog = writable(false);
 export const showCallOverlay = writable(false);
 
+export const temporaryChatEnabled = writable(false);
+export const scrollPaginationEnabled = writable(false);
+export const currentChatPage = writable(1);
+
 export type Model = OpenAIModel | OllamaModel;
 
 type BaseModel = {
@@ -80,7 +84,6 @@ type Settings = {
 	responseAutoPlayback?: boolean;
 	audio?: AudioSettings;
 	showUsername?: boolean;
-	saveChatHistory?: boolean;
 	notificationEnabled?: boolean;
 	title?: TitleSettings;
 	splitLargeDeltas?: boolean;
@@ -149,6 +152,7 @@ type Config = {
 		enable_web_search?: boolean;
 		enable_image_generation: boolean;
 		enable_admin_export: boolean;
+		enable_admin_chat_access: boolean;
 		enable_community_sharing: boolean;
 	};
 	oauth: {

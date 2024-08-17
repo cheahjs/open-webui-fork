@@ -10,6 +10,9 @@
 	import { user as _user } from '$lib/stores';
 	import { getFileContentById } from '$lib/apis/files';
 	import FileItem from '$lib/components/common/FileItem.svelte';
+	import { marked } from 'marked';
+	import { processResponseContent, replaceTokens } from '$lib/utils';
+	import MarkdownTokens from './MarkdownTokens.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -62,8 +65,8 @@
 	{#if !($settings?.chatBubble ?? true)}
 		<ProfileImage
 			src={message.user
-				? $models.find((m) => m.id === message.user)?.info?.meta?.profile_image_url ?? '/user.png'
-				: user?.profile_image_url ?? '/user.png'}
+				? ($models.find((m) => m.id === message.user)?.info?.meta?.profile_image_url ?? '/user.png')
+				: (user?.profile_image_url ?? '/user.png')}
 		/>
 	{/if}
 	<div class="w-full overflow-hidden pl-1">
@@ -91,12 +94,12 @@
 		{/if}
 
 		<div
-			class="prose chat-{message.role} w-full max-w-full flex flex-col justify-end dark:prose-invert prose-headings:my-0 prose-p:my-0 prose-p:-mb-4 prose-pre:my-0 prose-table:my-0 prose-blockquote:my-0 prose-img:my-0 prose-ul:-my-4 prose-ol:-my-4 prose-li:-my-3 prose-ul:-mb-6 prose-ol:-mb-6 prose-li:-mb-4 whitespace-pre-line"
+			class="prose chat-{message.role} w-full max-w-full dark:prose-invert prose-p:my-0 prose-img:my-1 prose-headings:my-1 prose-pre:my-0 prose-table:my-0 prose-blockquote:my-0 prose-ul:-my-0 prose-ol:-my-0 prose-li:-my-0 whitespace-pre-line"
 		>
 			{#if message.files}
 				<div class="mt-2.5 mb-1 w-full flex flex-col justify-end overflow-x-auto gap-1 flex-wrap">
 					{#each message.files as file}
-						<div class={$settings?.chatBubble ?? true ? 'self-end' : ''}>
+						<div class={($settings?.chatBubble ?? true) ? 'self-end' : ''}>
 							{#if file.type === 'image'}
 								<img src={file.url} alt="input" class=" max-h-96 rounded-lg" draggable="false" />
 							{:else}
@@ -162,20 +165,29 @@
 				</div>
 			{:else}
 				<div class="w-full">
-					<div class="flex {$settings?.chatBubble ?? true ? 'justify-end' : ''} mb-2">
+					<div class="flex {($settings?.chatBubble ?? true) ? 'justify-end pb-1' : 'w-full'}">
 						<div
-							class="rounded-3xl {$settings?.chatBubble ?? true
+							class="rounded-3xl {($settings?.chatBubble ?? true)
 								? `max-w-[90%] px-5 py-2  bg-gray-50 dark:bg-gray-850 ${
 										message.files ? 'rounded-tr-lg' : ''
-								  }`
-								: ''}  "
+									}`
+								: ' w-full'}"
 						>
-							<pre id="user-message">{message.content}</pre>
+							{#if message.content}
+								<div class="">
+									{#key message.id}
+										<MarkdownTokens
+											id={message.id}
+											tokens={marked.lexer(processResponseContent(message?.content))}
+										/>
+									{/key}
+								</div>
+							{/if}
 						</div>
 					</div>
 
 					<div
-						class=" flex {$settings?.chatBubble ?? true
+						class=" flex {($settings?.chatBubble ?? true)
 							? 'justify-end'
 							: ''}  text-gray-600 dark:text-gray-500"
 					>
