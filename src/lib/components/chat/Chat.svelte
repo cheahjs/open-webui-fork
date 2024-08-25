@@ -54,7 +54,13 @@
 	import { createOpenAITextStream } from '$lib/apis/streaming';
 	import { queryMemory } from '$lib/apis/memories';
 	import { getAndUpdateUserLocation, getUserSettings } from '$lib/apis/users';
-	import { chatCompleted, generateTitle, generateSearchQuery, chatAction } from '$lib/apis';
+	import {
+		chatCompleted,
+		generateTitle,
+		generateSearchQuery,
+		chatAction,
+		generateMoACompletion
+	} from '$lib/apis';
 
 	import Banner from '../common/Banner.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
@@ -264,9 +270,11 @@
 	//////////////////////////
 
 	const initNewChat = async () => {
-		window.history.replaceState(history.state, '', `/`);
-		await chatId.set('');
+		if ($page.url.pathname.includes('/c/')) {
+			window.history.replaceState(history.state, '', `/`);
+		}
 
+		await chatId.set('');
 		autoScroll = true;
 
 		title = '';
@@ -301,6 +309,10 @@
 				await tick();
 				submitPrompt(prompt);
 			}
+		}
+
+		if ($page.url.searchParams.get('call') === 'true') {
+			showCallOverlay.set(true);
 		}
 
 		selectedModels = selectedModels.map((modelId) =>
@@ -801,7 +813,18 @@
 
 		let files = JSON.parse(JSON.stringify(chatFiles));
 		if (model?.info?.meta?.knowledge ?? false) {
+			// Only initialize and add status if knowledge exists
+			responseMessage.statusHistory = [
+				{
+					action: 'knowledge_search',
+					description: $i18n.t(`Searching Knowledge for "{{searchQuery}}"`, {
+						searchQuery: userMessage.content
+					}),
+					done: false
+				}
+			];
 			files.push(...model.info.meta.knowledge);
+			messages = messages; // Trigger Svelte update
 		}
 		files.push(
 			...(userMessage?.files ?? []).filter((item) =>
@@ -809,6 +832,8 @@
 			),
 			...(responseMessage?.files ?? []).filter((item) => ['web_search_results'].includes(item.type))
 		);
+
+		scrollToBottom();
 
 		eventTarget.dispatchEvent(
 			new CustomEvent('chat:start', {
@@ -880,6 +905,12 @@
 
 							if ('citations' in data) {
 								responseMessage.citations = data.citations;
+								// Only remove status if it was initially set
+								if (model?.info?.meta?.knowledge ?? false) {
+									responseMessage.statusHistory = responseMessage.statusHistory.filter(
+										(status) => status.action !== 'knowledge_search'
+									);
+								}
 								continue;
 							}
 
@@ -970,7 +1001,7 @@
 			}
 
 			if ($chatId == _chatId) {
-				if (!$temporaryChatEnabled) {
+				if ($settings.saveChatHistory ?? true) {
 					chat = await updateChatById(localStorage.token, _chatId, {
 						messages: messages,
 						history: history,
@@ -1049,7 +1080,18 @@
 
 		let files = JSON.parse(JSON.stringify(chatFiles));
 		if (model?.info?.meta?.knowledge ?? false) {
+			// Only initialize and add status if knowledge exists
+			responseMessage.statusHistory = [
+				{
+					action: 'knowledge_search',
+					description: $i18n.t(`Searching Knowledge for "{{searchQuery}}"`, {
+						searchQuery: userMessage.content
+					}),
+					done: false
+				}
+			];
 			files.push(...model.info.meta.knowledge);
+			messages = messages; // Trigger Svelte update
 		}
 		files.push(
 			...(userMessage?.files ?? []).filter((item) =>
@@ -1189,6 +1231,12 @@
 
 					if (citations) {
 						responseMessage.citations = citations;
+						// Only remove status if it was initially set
+						if (model?.info?.meta?.knowledge ?? false) {
+							responseMessage.statusHistory = responseMessage.statusHistory.filter(
+								(status) => status.action !== 'knowledge_search'
+							);
+						}
 						continue;
 					}
 
@@ -1243,7 +1291,7 @@
 				}
 
 				if ($chatId == _chatId) {
-					if (!$temporaryChatEnabled) {
+					if ($settings.saveChatHistory ?? true) {
 						chat = await updateChatById(localStorage.token, _chatId, {
 							models: selectedModels,
 							messages: messages,
@@ -1511,6 +1559,69 @@
 			return [];
 		});
 	};
+
+	const saveChatHandler = async (_chatId) => {
+		if ($chatId == _chatId) {
+			if (!$temporaryChatEnabled) {
+				chat = await updateChatById(localStorage.token, _chatId, {
+					messages: messages,
+					history: history,
+					models: selectedModels,
+					params: params,
+					files: chatFiles
+				});
+
+				currentChatPage.set(1);
+				await chats.set(await getChatList(localStorage.token, $currentChatPage));
+			}
+		}
+	};
+	const mergeResponses = async (messageId, responses, _chatId) => {
+		console.log('mergeResponses', messageId, responses);
+		const message = history.messages[messageId];
+		const mergedResponse = {
+			status: true,
+			content: ''
+		};
+		message.merged = mergedResponse;
+		messages = messages;
+
+		try {
+			const [res, controller] = await generateMoACompletion(
+				localStorage.token,
+				message.model,
+				history.messages[message.parentId].content,
+				responses
+			);
+
+			if (res && res.ok && res.body) {
+				const textStream = await createOpenAITextStream(res.body, $settings.splitLargeChunks);
+				for await (const update of textStream) {
+					const { value, done, citations, error, usage } = update;
+					if (error || done) {
+						break;
+					}
+
+					if (mergedResponse.content == '' && value == '\n') {
+						continue;
+					} else {
+						mergedResponse.content += value;
+						messages = messages;
+					}
+
+					if (autoScroll) {
+						scrollToBottom();
+					}
+				}
+
+				await saveChatHandler(_chatId);
+			} else {
+				console.error(res);
+			}
+		} catch (e) {
+			console.error(e);
+		}
+	};
 </script>
 
 <svelte:head>
@@ -1522,6 +1633,25 @@
 </svelte:head>
 
 <audio id="audioElement" src="" style="display: none;" />
+
+<ChatControls
+	models={selectedModelIds.reduce((a, e, i, arr) => {
+		const model = $models.find((m) => m.id === e);
+		if (model) {
+			return [...a, model];
+		}
+		return a;
+	}, [])}
+	bind:show={showControls}
+	bind:chatFiles
+	bind:params
+	bind:files
+	{submitPrompt}
+	{stopResponse}
+	modelId={selectedModelIds?.at(0) ?? null}
+	chatId={$chatId}
+	{eventTarget}
+/>
 
 <EventConfirmDialog
 	bind:show={showEventConfirmation}
@@ -1541,17 +1671,6 @@
 		eventCallback(false);
 	}}
 />
-
-{#if $showCallOverlay}
-	<CallOverlay
-		{submitPrompt}
-		{stopResponse}
-		bind:files
-		modelId={selectedModelIds?.at(0) ?? null}
-		chatId={$chatId}
-		{eventTarget}
-	/>
-{/if}
 
 {#if !chatIdProp || (loaded && chatIdProp)}
 	<div
@@ -1637,6 +1756,7 @@
 						{sendPrompt}
 						{continueGeneration}
 						{regenerateResponse}
+						{mergeResponses}
 						{chatActionHandler}
 					/>
 				</div>
@@ -1662,21 +1782,11 @@
 					{messages}
 					{submitPrompt}
 					{stopResponse}
+					on:call={() => {
+						showControls = true;
+					}}
 				/>
 			</div>
 		</div>
-
-		<ChatControls
-			models={selectedModelIds.reduce((a, e, i, arr) => {
-				const model = $models.find((m) => m.id === e);
-				if (model) {
-					return [...a, model];
-				}
-				return a;
-			}, [])}
-			bind:show={showControls}
-			bind:chatFiles
-			bind:params
-		/>
 	</div>
 {/if}
