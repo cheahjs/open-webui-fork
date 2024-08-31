@@ -1,0 +1,6 @@
+services:
+  open-webui:
+    build:
+      cache_from:
+        - ghcr.io/open-webui/open-webui:cache-linux-amd64-main
+        - ghcr.io/open-webui/open-webui:cache-linux-amd64-dev
