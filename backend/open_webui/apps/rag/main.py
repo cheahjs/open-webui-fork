@@ -101,7 +101,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import (
     BSHTMLLoader,
     CSVLoader,
-    Docx2txtLoader,
     OutlookMessageLoader,
     PyPDFLoader,
     TextLoader,
@@ -110,6 +109,7 @@ from langchain_community.document_loaders import (
     UnstructuredMarkdownLoader,
     UnstructuredPowerPointLoader,
     UnstructuredRSTLoader,
+    UnstructuredWordDocumentLoader,
     UnstructuredXMLLoader,
     WebBaseLoader,
     YoutubeLoader,
@@ -1155,12 +1155,11 @@ def get_loader(filename: str, file_content_type: str, file_path: str):
             loader = UnstructuredMarkdownLoader(file_path)
         elif file_content_type == "application/epub+zip":
             loader = UnstructuredEPubLoader(file_path)
-        elif (
-            file_content_type
-            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            or file_ext in ["doc", "docx"]
-        ):
-            loader = Docx2txtLoader(file_path)
+        elif file_content_type in [
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/msword",
+        ] or file_ext in ["doc", "docx"]:
+            loader = UnstructuredWordDocumentLoader(file_path)
         elif file_content_type in [
             "application/vnd.ms-excel",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
