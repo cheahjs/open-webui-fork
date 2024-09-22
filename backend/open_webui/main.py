@@ -19,7 +19,9 @@ from open_webui.apps.audio.main import app as audio_app
 from open_webui.apps.images.main import app as images_app
 from open_webui.apps.ollama.main import app as ollama_app
 from open_webui.apps.ollama.main import (
-    generate_openai_chat_completion as generate_ollama_chat_completion,
+    GenerateChatCompletionForm,
+    generate_chat_completion as generate_ollama_chat_completion,
+    generate_openai_chat_completion as generate_ollama_openai_chat_completion,
 )
 from open_webui.apps.ollama.main import get_all_models as get_ollama_models
 from open_webui.apps.openai.main import app as openai_app
@@ -109,6 +111,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse, Response, StreamingResponse
 
+from open_webui.utils.security_headers import SecurityHeadersMiddleware
 
 from open_webui.utils.misc import (
     add_or_update_system_message,
@@ -133,6 +136,12 @@ from open_webui.utils.utils import (
     get_verified_user,
 )
 from open_webui.utils.webhook import post_webhook
+
+from open_webui.utils.payload import convert_payload_openai_to_ollama
+from open_webui.utils.response import (
+    convert_response_ollama_to_openai,
+    convert_streaming_response_ollama_to_openai,
+)
 
 if SAFE_MODE:
     print("SAFE MODE ENABLED")
@@ -586,8 +595,17 @@ class ChatCompletionMiddleware(BaseHTTPMiddleware):
         if len(contexts) > 0:
             context_string = "/n".join(contexts).strip()
             prompt = get_last_user_message(body["messages"])
+
             if prompt is None:
                 raise Exception("No user message found")
+            if (
+                rag_app.state.config.RELEVANCE_THRESHOLD == 0
+                and context_string.strip() == ""
+            ):
+                log.debug(
+                    f"With a 0 relevancy threshold for RAG, the context cannot be empty"
+                )
+
             # Workaround for Ollama 2.0+ system prompt issue
             # TODO: replace with add_or_update_system_message
             if model["owned_by"] == "ollama":
@@ -780,6 +798,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(SecurityHeadersMiddleware)
+
 
 @app.middleware("http")
 async def commit_session_after_request(request: Request, call_next):
@@ -810,6 +830,24 @@ async def update_embedding_function(request: Request, call_next):
     if "/embedding/update" in request.url.path:
         webui_app.state.EMBEDDING_FUNCTION = rag_app.state.EMBEDDING_FUNCTION
     return response
+
+
+@app.middleware("http")
+async def inspect_websocket(request: Request, call_next):
+    if (
+        "/ws/socket.io" in request.url.path
+        and request.query_params.get("transport") == "websocket"
+    ):
+        upgrade = (request.headers.get("Upgrade") or "").lower()
+        connection = (request.headers.get("Connection") or "").lower().split(",")
+        # Check that there's the correct headers for an upgrade, else reject the connection
+        # This is to work around this upstream issue: https://github.com/miguelgrinberg/python-engineio/issues/367
+        if upgrade != "websocket" or "upgrade" not in connection:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"detail": "Invalid WebSocket upgrade request"},
+            )
+    return await call_next(request)
 
 
 app.mount("/ws", socket_app)
@@ -1018,7 +1056,18 @@ async def generate_chat_completions(form_data: dict, user=Depends(get_verified_u
     if model.get("pipe"):
         return await generate_function_chat_completion(form_data, user=user)
     if model["owned_by"] == "ollama":
-        return await generate_ollama_chat_completion(form_data, user=user)
+        # Using /ollama/api/chat endpoint
+        form_data = convert_payload_openai_to_ollama(form_data)
+        form_data = GenerateChatCompletionForm(**form_data)
+        response = await generate_ollama_chat_completion(form_data=form_data, user=user)
+        if form_data.stream:
+            response.headers["content-type"] = "text/event-stream"
+            return StreamingResponse(
+                convert_streaming_response_ollama_to_openai(response),
+                headers=dict(response.headers),
+            )
+        else:
+            return convert_response_ollama_to_openai(response)
     else:
         return await generate_openai_chat_completion(form_data, user=user)
 
@@ -1368,9 +1417,10 @@ async def generate_title(form_data: dict, user=Depends(get_verified_user)):
 
     # Check if the user has a custom task model
     # If the user has a custom task model, use that model
-    model_id = get_task_model_id(model_id)
+    task_model_id = get_task_model_id(model_id)
+    print(task_model_id)
 
-    print(model_id)
+    model = app.state.MODELS[task_model_id]
 
     if app.state.config.TITLE_GENERATION_PROMPT_TEMPLATE != "":
         template = app.state.config.TITLE_GENERATION_PROMPT_TEMPLATE
@@ -1397,16 +1447,22 @@ Prompt: {{prompt:middletruncate:8000}}"""
     )
 
     payload = {
-        "model": model_id,
+        "model": task_model_id,
         "messages": [{"role": "user", "content": content}],
         "stream": False,
-        "max_tokens": 50,
+        **(
+            {"max_tokens": 50}
+            if app.state.MODELS[task_model_id]["owned_by"] == "ollama"
+            else {
+                "max_completion_tokens": 50,
+            }
+        ),
         "chat_id": form_data.get("chat_id", None),
         "metadata": {"task": str(TASKS.TITLE_GENERATION)},
     }
-
     log.debug(payload)
 
+    # Handle pipeline filters
     try:
         payload = filter_pipeline(payload, user)
     except Exception as e:
@@ -1420,7 +1476,6 @@ Prompt: {{prompt:middletruncate:8000}}"""
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={"detail": str(e)},
             )
-
     if "chat_id" in payload:
         del payload["chat_id"]
 
@@ -1445,19 +1500,23 @@ async def generate_search_query(form_data: dict, user=Depends(get_verified_user)
 
     # Check if the user has a custom task model
     # If the user has a custom task model, use that model
-    model_id = get_task_model_id(model_id)
+    task_model_id = get_task_model_id(model_id)
+    print(task_model_id)
 
-    print(model_id)
+    model = app.state.MODELS[task_model_id]
 
     if app.state.config.SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE != "":
         template = app.state.config.SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE
     else:
-        template = """Assess the need for a web search based on the current question and prior interactions, but lean towards suggesting a Google search query if uncertain. Generate a Google search query even when the answer might be straightforward, as additional information may enhance comprehension or provide updated data. If absolutely certain that no further information is required, return an empty string. Default to a search query if unsure or in doubt. Today's date is {{CURRENT_DATE}}.
+        template = """Given the user's message and interaction history, decide if a web search is necessary. You must be concise and exclusively provide a search query if one is necessary. Refrain from verbose responses or any additional commentary. Prefer suggesting a search if uncertain to provide comprehensive or updated information. If a search isn't needed at all, respond with an empty string. Default to a search query when in doubt. Today's date is {{CURRENT_DATE}}.
+
+User Message:
+{{prompt:end:4000}}
 
 Interaction History:
 {{MESSAGES:END:6}}
-Current Question:
-{{prompt:end:4000}}"""
+
+Search Query:"""
 
     content = search_query_generation_template(
         template, form_data["messages"], {"name": user.name}
@@ -1466,15 +1525,21 @@ Current Question:
     print("content", content)
 
     payload = {
-        "model": model_id,
+        "model": task_model_id,
         "messages": [{"role": "user", "content": content}],
         "stream": False,
-        "max_tokens": 30,
+        **(
+            {"max_tokens": 30}
+            if app.state.MODELS[task_model_id]["owned_by"] == "ollama"
+            else {
+                "max_completion_tokens": 30,
+            }
+        ),
         "metadata": {"task": str(TASKS.QUERY_GENERATION)},
     }
+    log.debug(payload)
 
-    print(payload)
-
+    # Handle pipeline filters
     try:
         payload = filter_pipeline(payload, user)
     except Exception as e:
@@ -1488,7 +1553,6 @@ Current Question:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={"detail": str(e)},
             )
-
     if "chat_id" in payload:
         del payload["chat_id"]
 
@@ -1508,16 +1572,16 @@ async def generate_emoji(form_data: dict, user=Depends(get_verified_user)):
 
     # Check if the user has a custom task model
     # If the user has a custom task model, use that model
-    model_id = get_task_model_id(model_id)
+    task_model_id = get_task_model_id(model_id)
+    print(task_model_id)
 
-    print(model_id)
+    model = app.state.MODELS[task_model_id]
 
     template = '''
 Your task is to reflect the speaker's likely facial expression through a fitting emoji. Interpret emotions from the message and reflect their facial expression using fitting, diverse emojis (e.g., 😊, 😢, 😡, 😱).
 
 Message: """{{prompt}}"""
 '''
-
     content = title_generation_template(
         template,
         form_data["prompt"],
@@ -1528,16 +1592,22 @@ Message: """{{prompt}}"""
     )
 
     payload = {
-        "model": model_id,
+        "model": task_model_id,
         "messages": [{"role": "user", "content": content}],
         "stream": False,
-        "max_tokens": 4,
+        **(
+            {"max_tokens": 4}
+            if app.state.MODELS[task_model_id]["owned_by"] == "ollama"
+            else {
+                "max_completion_tokens": 4,
+            }
+        ),
         "chat_id": form_data.get("chat_id", None),
         "metadata": {"task": str(TASKS.EMOJI_GENERATION)},
     }
-
     log.debug(payload)
 
+    # Handle pipeline filters
     try:
         payload = filter_pipeline(payload, user)
     except Exception as e:
@@ -1551,7 +1621,6 @@ Message: """{{prompt}}"""
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={"detail": str(e)},
             )
-
     if "chat_id" in payload:
         del payload["chat_id"]
 
@@ -1571,8 +1640,10 @@ async def generate_moa_response(form_data: dict, user=Depends(get_verified_user)
 
     # Check if the user has a custom task model
     # If the user has a custom task model, use that model
-    model_id = get_task_model_id(model_id)
-    print(model_id)
+    task_model_id = get_task_model_id(model_id)
+    print(task_model_id)
+
+    model = app.state.MODELS[task_model_id]
 
     template = """You have been provided with a set of responses from various models to the latest user query: "{{prompt}}"
 
@@ -1587,13 +1658,12 @@ Responses from models: {{responses}}"""
     )
 
     payload = {
-        "model": model_id,
+        "model": task_model_id,
         "messages": [{"role": "user", "content": content}],
         "stream": form_data.get("stream", False),
         "chat_id": form_data.get("chat_id", None),
         "metadata": {"task": str(TASKS.MOA_RESPONSE_GENERATION)},
     }
-
     log.debug(payload)
 
     try:
@@ -1609,7 +1679,6 @@ Responses from models: {{responses}}"""
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={"detail": str(e)},
             )
-
     if "chat_id" in payload:
         del payload["chat_id"]
 

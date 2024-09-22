@@ -41,7 +41,7 @@
 	}
 </script>
 
-<div class=" space-y-1 text-xs">
+<div class=" space-y-1 text-xs pb-safe-bottom">
 	<div class=" py-0.5 w-full justify-between">
 		<div class="flex w-full justify-between">
 			<div class=" self-center text-xs font-medium">{$i18n.t('Seed')}</div>
@@ -734,7 +734,7 @@
 						id="steps-range"
 						type="range"
 						min="-2"
-						max="16000"
+						max="131072"
 						step="1"
 						bind:value={params.max_tokens}
 						class="w-full h-2 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
@@ -746,7 +746,6 @@
 						type="number"
 						class=" bg-transparent text-center w-14"
 						min="-2"
-						max="16000"
 						step="1"
 					/>
 				</div>
