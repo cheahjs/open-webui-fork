@@ -1,17 +1,23 @@
 <script lang="ts">
 	import DOMPurify from 'dompurify';
-	import { onMount } from 'svelte';
+	import { createEventDispatcher, onMount } from 'svelte';
 	import { marked, type Token } from 'marked';
 	import { revertSanitizedResponseContent, unescapeHtml } from '$lib/utils';
+
+	import { WEBUI_BASE_URL } from '$lib/constants';
 
 	import CodeBlock from '$lib/components/chat/Messages/CodeBlock.svelte';
 	import MarkdownInlineTokens from '$lib/components/chat/Messages/Markdown/MarkdownInlineTokens.svelte';
 	import KatexRenderer from './KatexRenderer.svelte';
-	import { WEBUI_BASE_URL } from '$lib/constants';
+	import Collapsible from '$lib/components/common/Collapsible.svelte';
+
+	const dispatch = createEventDispatcher();
 
 	export let id: string;
 	export let tokens: Token[];
 	export let top = true;
+
+	export let save = false;
 
 	const headerComponent = (depth: number) => {
 		return 'h' + depth;
@@ -19,7 +25,7 @@
 </script>
 
 <!-- {JSON.stringify(tokens)} -->
-{#each tokens as token, tokenIdx}
+{#each tokens as token, tokenIdx (tokenIdx)}
 	{#if token.type === 'hr'}
 		<hr />
 	{:else if token.type === 'heading'}
@@ -32,6 +38,13 @@
 			{token}
 			lang={token?.lang ?? ''}
 			code={revertSanitizedResponseContent(token?.text ?? '')}
+			{save}
+			on:save={(e) => {
+				dispatch('update', {
+					oldContent: token.text,
+					newContent: e.detail
+				});
+			}}
 		/>
 	{:else if token.type === 'table'}
 		<div class="scrollbar-hidden relative whitespace-nowrap overflow-x-auto max-w-full">
@@ -94,6 +107,12 @@
 				{/each}
 			</ul>
 		{/if}
+	{:else if token.type === 'details'}
+		<Collapsible title={token.summary} className="w-fit space-y-1">
+			<div class=" mb-1.5" slot="content">
+				<svelte:self id={`${id}-${tokenIdx}-d`} tokens={marked.lexer(token.text)} />
+			</div>
+		</Collapsible>
 	{:else if token.type === 'html'}
 		{@const html = DOMPurify.sanitize(token.text)}
 		{#if html && html.includes('<video')}

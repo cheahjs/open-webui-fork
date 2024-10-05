@@ -221,6 +221,12 @@ if FROM_INIT_PY:
             else:
                 shutil.copy2(item, dest)
 
+        # Zip the data directory
+        shutil.make_archive(DATA_DIR.parent / "open_webui_data", "zip", DATA_DIR)
+
+        # Remove the old data directory
+        shutil.rmtree(DATA_DIR)
+
     DATA_DIR = Path(os.getenv("DATA_DIR", OPEN_WEBUI_DIR / "data"))
 
 
@@ -233,18 +239,6 @@ if FROM_INIT_PY:
         os.getenv("FRONTEND_BUILD_DIR", OPEN_WEBUI_DIR / "frontend")
     ).resolve()
 
-
-RESET_CONFIG_ON_START = (
-    os.environ.get("RESET_CONFIG_ON_START", "False").lower() == "true"
-)
-
-if RESET_CONFIG_ON_START:
-    try:
-        os.remove(f"{DATA_DIR}/config.json")
-        with open(f"{DATA_DIR}/config.json", "w") as f:
-            f.write("{}")
-    except Exception:
-        pass
 
 ####################################
 # Database
@@ -264,6 +258,10 @@ DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DATA_DIR}/webui.db")
 if "postgres://" in DATABASE_URL:
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://")
 
+
+RESET_CONFIG_ON_START = (
+    os.environ.get("RESET_CONFIG_ON_START", "False").lower() == "true"
+)
 
 ####################################
 # WEBUI_AUTH (Required for security)
@@ -307,3 +305,14 @@ ENABLE_WEBSOCKET_SUPPORT = (
 WEBSOCKET_MANAGER = os.environ.get("WEBSOCKET_MANAGER", "")
 
 WEBSOCKET_REDIS_URL = os.environ.get("WEBSOCKET_REDIS_URL", "redis://localhost:6379/0")
+
+
+AIOHTTP_CLIENT_TIMEOUT = os.environ.get("AIOHTTP_CLIENT_TIMEOUT", "")
+
+if AIOHTTP_CLIENT_TIMEOUT == "":
+    AIOHTTP_CLIENT_TIMEOUT = None
+else:
+    try:
+        AIOHTTP_CLIENT_TIMEOUT = int(AIOHTTP_CLIENT_TIMEOUT)
+    except Exception:
+        AIOHTTP_CLIENT_TIMEOUT = 300

@@ -5,20 +5,34 @@
 
 	import { v4 as uuidv4 } from 'uuid';
 
-	import { getContext, getAllContexts, onMount } from 'svelte';
+	import { getContext, getAllContexts, onMount, tick, createEventDispatcher } from 'svelte';
 	import { copyToClipboard } from '$lib/utils';
 
 	import 'highlight.js/styles/github-dark.min.css';
 
 	import PyodideWorker from '$lib/workers/pyodide.worker?worker';
+	import CodeEditor from '$lib/components/common/CodeEditor.svelte';
 
 	const i18n = getContext('i18n');
+	const dispatch = createEventDispatcher();
 
 	export let id = '';
+	export let save = false;
 
 	export let token;
 	export let lang = '';
 	export let code = '';
+
+	let _code = '';
+	$: if (code) {
+		updateCode();
+	}
+
+	const updateCode = () => {
+		_code = code;
+	};
+
+	let _token = null;
 
 	let mermaidHtml = null;
 
@@ -30,6 +44,18 @@
 	let result = null;
 
 	let copied = false;
+	let saved = false;
+
+	const saveCode = () => {
+		saved = true;
+
+		code = _code;
+		dispatch('save', code);
+
+		setTimeout(() => {
+			saved = false;
+		}, 1000);
+	};
 
 	const copyCode = async () => {
 		copied = true;
@@ -226,25 +252,26 @@ __builtins__.input = input`);
 		}
 	};
 
-	$: if (token.raw) {
+	const render = async () => {
 		if (lang === 'mermaid' && (token?.raw ?? '').slice(-4).includes('```')) {
 			(async () => {
 				await drawMermaidDiagram();
 			})();
-		} else {
-			// Function to perform the code highlighting
-			const highlightCode = () => {
-				highlightedCode = hljs.highlightAuto(code, hljs.getLanguage(lang)?.aliases).value || code;
-			};
+		}
+	};
 
-			// Clear the previous timeout if it exists
-			clearTimeout(debounceTimeout);
-			// Set a new timeout to debounce the code highlighting
-			debounceTimeout = setTimeout(highlightCode, 10);
+	$: if (token) {
+		if (JSON.stringify(token) !== JSON.stringify(_token)) {
+			_token = token;
 		}
 	}
 
+	$: if (_token) {
+		render();
+	}
+
 	onMount(async () => {
+		console.log('codeblock', lang, code);
 		if (document.documentElement.classList.contains('dark')) {
 			mermaid.initialize({
 				startOnLoad: true,
@@ -281,28 +308,52 @@ __builtins__.input = input`);
 					{:else}
 						<button
 							class="copy-code-button bg-none border-none p-1"
-							on:click={() => {
+							on:click={async () => {
+								code = _code;
+								await tick();
 								executePython(code);
 							}}>{$i18n.t('Run')}</button
 						>
 					{/if}
 				{/if}
+
+				{#if save}
+					<button class="copy-code-button bg-none border-none p-1" on:click={saveCode}>
+						{saved ? $i18n.t('Saved') : $i18n.t('Save')}
+					</button>
+				{/if}
+
 				<button class="copy-code-button bg-none border-none p-1" on:click={copyCode}
-					>{copied ? $i18n.t('Copied') : $i18n.t('Copy Code')}</button
+					>{copied ? $i18n.t('Copied') : $i18n.t('Copy')}</button
 				>
 			</div>
 		</div>
 
-		<pre
+		<div
+			class="language-{lang} rounded-t-none {executing || stdout || stderr || result
+				? ''
+				: 'rounded-b-lg'} overflow-hidden"
+		>
+			<CodeEditor
+				value={code}
+				{id}
+				{lang}
+				on:save={() => {
+					saveCode();
+				}}
+				on:change={(e) => {
+					_code = e.detail.value;
+				}}
+			/>
+		</div>
+
+		<!-- <pre
 			class=" hljs p-4 px-5 overflow-x-auto"
 			style="border-top-left-radius: 0px; border-top-right-radius: 0px; {(executing ||
 				stdout ||
 				stderr ||
 				result) &&
-				'border-bottom-left-radius: 0px; border-bottom-right-radius: 0px;'}"><code
-				class="language-{lang} rounded-t-none whitespace-pre"
-				>{#if highlightedCode}{@html highlightedCode}{:else}{code}{/if}</code
-			></pre>
+				'border-bottom-left-radius: 0px; border-bottom-right-radius: 0px;'}"><code></code></pre> -->
 
 		<div
 			id="plt-canvas-{id}"
