@@ -14,7 +14,7 @@
 
 	import { oneDark } from '@codemirror/theme-one-dark';
 
-	import { onMount, createEventDispatcher, getContext } from 'svelte';
+	import { onMount, createEventDispatcher, getContext, tick } from 'svelte';
 
 	import { formatPythonCode } from '$lib/apis/utils';
 	import { toast } from 'svelte-sonner';
@@ -31,11 +31,13 @@
 	}
 
 	const updateValue = () => {
-		_value = value;
-		if (codeEditor) {
-			codeEditor.dispatch({
-				changes: [{ from: 0, to: codeEditor.state.doc.length, insert: _value }]
-			});
+		if (_value !== value) {
+			_value = value;
+			if (codeEditor) {
+				codeEditor.dispatch({
+					changes: [{ from: 0, to: codeEditor.state.doc.length, insert: _value }]
+				});
+			}
 		}
 	};
 
@@ -49,10 +51,7 @@
 	let editorLanguage = new Compartment();
 
 	const getLang = async () => {
-		console.log(languages);
-
 		const language = languages.find((l) => l.alias.includes(lang));
-
 		return await language?.load();
 	};
 
@@ -68,6 +67,10 @@
 				codeEditor.dispatch({
 					changes: [{ from: 0, to: codeEditor.state.doc.length, insert: formattedCode }]
 				});
+
+				_value = formattedCode;
+				dispatch('change', { value: _value });
+				await tick();
 
 				toast.success($i18n.t('Code formatted successfully'));
 				return true;

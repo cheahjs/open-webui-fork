@@ -1,5 +1,5 @@
 <script>
-	import { getContext, createEventDispatcher, onMount } from 'svelte';
+	import { getContext, createEventDispatcher, onMount, tick } from 'svelte';
 
 	const i18n = getContext('i18n');
 
@@ -151,10 +151,18 @@ class Tools:
 
 	const submitHandler = async () => {
 		if (codeEditor) {
+			content = _content;
+			await tick();
+
 			const res = await codeEditor.formatPythonCodeHandler();
+			await tick();
+
+			content = _content;
+			await tick();
 
 			if (res) {
 				console.log('Code formatted successfully');
+
 				saveHandler();
 			}
 		}
@@ -241,7 +249,6 @@ class Tools:
 							_content = e.detail.value;
 						}}
 						on:save={() => {
-							content = _content;
 							if (formElement) {
 								formElement.requestSubmit();
 							}

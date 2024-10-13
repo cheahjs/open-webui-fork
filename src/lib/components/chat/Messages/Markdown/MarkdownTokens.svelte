@@ -33,19 +33,27 @@
 			<MarkdownInlineTokens id={`${id}-${tokenIdx}-h`} tokens={token.tokens} />
 		</svelte:element>
 	{:else if token.type === 'code'}
-		<CodeBlock
-			id={`${id}-${tokenIdx}`}
-			{token}
-			lang={token?.lang ?? ''}
-			code={revertSanitizedResponseContent(token?.text ?? '')}
-			{save}
-			on:save={(e) => {
-				dispatch('update', {
-					oldContent: token.text,
-					newContent: e.detail
-				});
-			}}
-		/>
+		{#if token.raw.includes('```')}
+			<CodeBlock
+				id={`${id}-${tokenIdx}`}
+				{token}
+				lang={token?.lang ?? ''}
+				code={revertSanitizedResponseContent(token?.text ?? '')}
+				{save}
+				on:code={(e) => {
+					dispatch('code', e.detail);
+				}}
+				on:save={(e) => {
+					dispatch('update', {
+						raw: token.raw,
+						oldContent: token.text,
+						newContent: e.detail
+					});
+				}}
+			/>
+		{:else}
+			{token.text}
+		{/if}
 	{:else if token.type === 'table'}
 		<div class="scrollbar-hidden relative whitespace-nowrap overflow-x-auto max-w-full">
 			<table class="w-full">
