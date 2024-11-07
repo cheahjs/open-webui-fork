@@ -59,6 +59,7 @@ jobs:
         run: |
           git init --initial-branch=main
           git lfs track "*.ttf"
+          git lfs track "*.jpg"
           rm demo.gif
           git add .
           git commit -m "GitHub deploy: ${{ github.sha }}"
