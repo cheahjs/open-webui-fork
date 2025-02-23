@@ -58,7 +58,6 @@ async def get_all_base_models(request: Request):
     return models
 
 
-@cached(ttl=3)
 async def get_all_models(request):
     models = await get_all_base_models(request)
 
@@ -143,7 +142,7 @@ async def get_all_models(request):
                     custom_model.base_model_id == model["id"]
                     or custom_model.base_model_id == model["id"].split(":")[0]
                 ):
-                    owned_by = model["owned_by"]
+                    owned_by = model.get("owned_by", "unknown owner")
                     if "pipe" in model:
                         pipe = model["pipe"]
                     break

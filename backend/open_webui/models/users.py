@@ -2,7 +2,12 @@ import time
 from typing import Optional
 
 from open_webui.internal.db import Base, JSONField, get_db
+
+
 from open_webui.models.chats import Chats
+from open_webui.models.groups import Groups
+
+
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import BigInteger, Column, String, Text
 
@@ -66,6 +71,13 @@ class UserResponse(BaseModel):
     id: str
     name: str
     email: str
+    role: str
+    profile_image_url: str
+
+
+class UserNameResponse(BaseModel):
+    id: str
+    name: str
     role: str
     profile_image_url: str
 
@@ -147,13 +159,25 @@ class UsersTable:
         except Exception:
             return None
 
-    def get_users(self, skip: int = 0, limit: int = 50) -> list[UserModel]:
+    def get_users(
+        self, skip: Optional[int] = None, limit: Optional[int] = None
+    ) -> list[UserModel]:
         with get_db() as db:
-            users = (
-                db.query(User)
-                # .offset(skip).limit(limit)
-                .all()
-            )
+
+            query = db.query(User).order_by(User.created_at.desc())
+
+            if skip:
+                query = query.offset(skip)
+            if limit:
+                query = query.limit(limit)
+
+            users = query.all()
+
+            return [UserModel.model_validate(user) for user in users]
+
+    def get_users_by_user_ids(self, user_ids: list[str]) -> list[UserModel]:
+        with get_db() as db:
+            users = db.query(User).filter(User.id.in_(user_ids)).all()
             return [UserModel.model_validate(user) for user in users]
 
     def get_num_users(self) -> Optional[int]:
@@ -165,6 +189,22 @@ class UsersTable:
             with get_db() as db:
                 user = db.query(User).order_by(User.created_at).first()
                 return UserModel.model_validate(user)
+        except Exception:
+            return None
+
+    def get_user_webhook_url_by_id(self, id: str) -> Optional[str]:
+        try:
+            with get_db() as db:
+                user = db.query(User).filter_by(id=id).first()
+
+                if user.settings is None:
+                    return None
+                else:
+                    return (
+                        user.settings.get("ui", {})
+                        .get("notifications", {})
+                        .get("webhook_url", None)
+                    )
         except Exception:
             return None
 
@@ -231,11 +271,31 @@ class UsersTable:
         except Exception:
             return None
 
+    def update_user_settings_by_id(self, id: str, updated: dict) -> Optional[UserModel]:
+        try:
+            with get_db() as db:
+                user_settings = db.query(User).filter_by(id=id).first().settings
+
+                if user_settings is None:
+                    user_settings = {}
+
+                user_settings.update(updated)
+
+                db.query(User).filter_by(id=id).update({"settings": user_settings})
+                db.commit()
+
+                user = db.query(User).filter_by(id=id).first()
+                return UserModel.model_validate(user)
+        except Exception:
+            return None
+
     def delete_user_by_id(self, id: str) -> bool:
         try:
+            # Remove User from Groups
+            Groups.remove_user_from_all_groups(id)
+
             # Delete User Chats
             result = Chats.delete_chats_by_user_id(id)
-
             if result:
                 with get_db() as db:
                     # Delete User
@@ -264,6 +324,11 @@ class UsersTable:
                 return user.api_key
         except Exception:
             return None
+
+    def get_valid_user_ids(self, user_ids: list[str]) -> list[str]:
+        with get_db() as db:
+            users = db.query(User).filter(User.id.in_(user_ids)).all()
+            return [user.id for user in users]
 
 
 Users = UsersTable()

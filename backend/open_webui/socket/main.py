@@ -4,7 +4,10 @@ import logging
 import sys
 import time
 
-from open_webui.models.users import Users
+from open_webui.models.users import Users, UserNameResponse
+from open_webui.models.channels import Channels
+from open_webui.models.chats import Chats
+
 from open_webui.env import (
     ENABLE_WEBSOCKET_SUPPORT,
     WEBSOCKET_MANAGER,
@@ -149,20 +152,19 @@ async def connect(sid, environ, auth):
             user = Users.get_user_by_id(data["id"])
 
         if user:
-            SESSION_POOL[sid] = user.id
+            SESSION_POOL[sid] = user.model_dump()
             if user.id in USER_POOL:
                 USER_POOL[user.id] = USER_POOL[user.id] + [sid]
             else:
                 USER_POOL[user.id] = [sid]
 
             # print(f"user {user.name}({user.id}) connected with session ID {sid}")
-            await sio.emit("user-count", {"count": len(USER_POOL.items())})
+            await sio.emit("user-list", {"user_ids": list(USER_POOL.keys())})
             await sio.emit("usage", {"models": get_models_in_use()})
 
 
 @sio.on("user-join")
 async def user_join(sid, data):
-    # print("user-join", sid, data)
 
     auth = data["auth"] if "auth" in data else None
     if not auth or "token" not in auth:
@@ -176,39 +178,91 @@ async def user_join(sid, data):
     if not user:
         return
 
-    SESSION_POOL[sid] = user.id
+    SESSION_POOL[sid] = user.model_dump()
     if user.id in USER_POOL:
         USER_POOL[user.id] = USER_POOL[user.id] + [sid]
     else:
         USER_POOL[user.id] = [sid]
 
+    # Join all the channels
+    channels = Channels.get_channels_by_user_id(user.id)
+    log.debug(f"{channels=}")
+    for channel in channels:
+        await sio.enter_room(sid, f"channel:{channel.id}")
+
     # print(f"user {user.name}({user.id}) connected with session ID {sid}")
 
-    await sio.emit("user-count", {"count": len(USER_POOL.items())})
+    await sio.emit("user-list", {"user_ids": list(USER_POOL.keys())})
+    return {"id": user.id, "name": user.name}
 
 
-@sio.on("user-count")
-async def user_count(sid):
-    await sio.emit("user-count", {"count": len(USER_POOL.items())})
+@sio.on("join-channels")
+async def join_channel(sid, data):
+    auth = data["auth"] if "auth" in data else None
+    if not auth or "token" not in auth:
+        return
+
+    data = decode_token(auth["token"])
+    if data is None or "id" not in data:
+        return
+
+    user = Users.get_user_by_id(data["id"])
+    if not user:
+        return
+
+    # Join all the channels
+    channels = Channels.get_channels_by_user_id(user.id)
+    log.debug(f"{channels=}")
+    for channel in channels:
+        await sio.enter_room(sid, f"channel:{channel.id}")
 
 
-@sio.on("chat")
-async def chat(sid, data):
-    print("chat", sid, SESSION_POOL[sid], data)
+@sio.on("channel-events")
+async def channel_events(sid, data):
+    room = f"channel:{data['channel_id']}"
+    participants = sio.manager.get_participants(
+        namespace="/",
+        room=room,
+    )
+
+    sids = [sid for sid, _ in participants]
+    if sid not in sids:
+        return
+
+    event_data = data["data"]
+    event_type = event_data["type"]
+
+    if event_type == "typing":
+        await sio.emit(
+            "channel-events",
+            {
+                "channel_id": data["channel_id"],
+                "message_id": data.get("message_id", None),
+                "data": event_data,
+                "user": UserNameResponse(**SESSION_POOL[sid]).model_dump(),
+            },
+            room=room,
+        )
+
+
+@sio.on("user-list")
+async def user_list(sid):
+    await sio.emit("user-list", {"user_ids": list(USER_POOL.keys())})
 
 
 @sio.event
 async def disconnect(sid):
     if sid in SESSION_POOL:
-        user_id = SESSION_POOL[sid]
+        user = SESSION_POOL[sid]
         del SESSION_POOL[sid]
 
+        user_id = user["id"]
         USER_POOL[user_id] = [_sid for _sid in USER_POOL[user_id] if _sid != sid]
 
         if len(USER_POOL[user_id]) == 0:
             del USER_POOL[user_id]
 
-        await sio.emit("user-count", {"count": len(USER_POOL)})
+        await sio.emit("user-list", {"user_ids": list(USER_POOL.keys())})
     else:
         pass
         # print(f"Unknown session ID {sid} disconnected")
@@ -225,27 +279,92 @@ def get_event_emitter(request_info):
             await sio.emit(
                 "chat-events",
                 {
-                    "chat_id": request_info["chat_id"],
-                    "message_id": request_info["message_id"],
+                    "chat_id": request_info.get("chat_id", None),
+                    "message_id": request_info.get("message_id", None),
                     "data": event_data,
                 },
                 to=session_id,
+            )
+
+        if "type" in event_data and event_data["type"] == "status":
+            Chats.add_message_status_to_chat_by_id_and_message_id(
+                request_info["chat_id"],
+                request_info["message_id"],
+                event_data.get("data", {}),
+            )
+
+        if "type" in event_data and event_data["type"] == "message":
+            message = Chats.get_message_by_id_and_message_id(
+                request_info["chat_id"],
+                request_info["message_id"],
+            )
+
+            content = message.get("content", "")
+            content += event_data.get("data", {}).get("content", "")
+
+            Chats.upsert_message_to_chat_by_id_and_message_id(
+                request_info["chat_id"],
+                request_info["message_id"],
+                {
+                    "content": content,
+                },
+            )
+
+        if "type" in event_data and event_data["type"] == "replace":
+            content = event_data.get("data", {}).get("content", "")
+
+            Chats.upsert_message_to_chat_by_id_and_message_id(
+                request_info["chat_id"],
+                request_info["message_id"],
+                {
+                    "content": content,
+                },
             )
 
     return __event_emitter__
 
 
 def get_event_call(request_info):
-    async def __event_call__(event_data):
+    async def __event_caller__(event_data):
         response = await sio.call(
             "chat-events",
             {
-                "chat_id": request_info["chat_id"],
-                "message_id": request_info["message_id"],
+                "chat_id": request_info.get("chat_id", None),
+                "message_id": request_info.get("message_id", None),
                 "data": event_data,
             },
             to=request_info["session_id"],
         )
         return response
 
-    return __event_call__
+    return __event_caller__
+
+
+get_event_caller = get_event_call
+
+
+def get_user_id_from_session_pool(sid):
+    user = SESSION_POOL.get(sid)
+    if user:
+        return user["id"]
+    return None
+
+
+def get_user_ids_from_room(room):
+    active_session_ids = sio.manager.get_participants(
+        namespace="/",
+        room=room,
+    )
+
+    active_user_ids = list(
+        set(
+            [SESSION_POOL.get(session_id[0])["id"] for session_id in active_session_ids]
+        )
+    )
+    return active_user_ids
+
+
+def get_active_status_by_user_id(user_id):
+    if user_id in USER_POOL:
+        return True
+    return False

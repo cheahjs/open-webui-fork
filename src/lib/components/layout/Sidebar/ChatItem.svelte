@@ -87,8 +87,14 @@
 	};
 
 	const cloneChatHandler = async (id) => {
-		const res = await cloneChatById(localStorage.token, id).catch((error) => {
-			toast.error(error);
+		const res = await cloneChatById(
+			localStorage.token,
+			id,
+			$i18n.t('Clone of {{TITLE}}', {
+				TITLE: title
+			})
+		).catch((error) => {
+			toast.error(`${error}`);
 			return null;
 		});
 
@@ -103,7 +109,7 @@
 
 	const deleteChatHandler = async (id) => {
 		const res = await deleteChatById(localStorage.token, id).catch((error) => {
-			toast.error(error);
+			toast.error(`${error}`);
 			return null;
 		});
 
@@ -234,7 +240,8 @@
 			<input
 				use:focusEdit
 				bind:value={chatTitle}
-				class=" bg-transparent w-full outline-none mr-10"
+				id="chat-title-input-{id}"
+				class=" bg-transparent w-full outline-hidden mr-10"
 			/>
 		</div>
 	{:else}
@@ -267,7 +274,7 @@
 			draggable="false"
 		>
 			<div class=" flex self-center flex-1 w-full">
-				<div class=" text-left self-center overflow-hidden w-full h-[20px]">
+				<div dir="auto" class="text-left self-center overflow-hidden w-full h-[20px]">
 					{title}
 				</div>
 			</div>
@@ -284,7 +291,7 @@
 				: 'invisible group-hover:visible from-gray-100 dark:from-gray-950'}
             absolute {className === 'pr-2'
 			? 'right-[8px]'
-			: 'right-0'}  top-[4px] py-1 pr-0.5 mr-1.5 pl-5 bg-gradient-to-l from-80%
+			: 'right-0'}  top-[4px] py-1 pr-0.5 mr-1.5 pl-5 bg-linear-to-l from-80%
 
               to-transparent"
 		on:mouseenter={(e) => {
@@ -362,10 +369,15 @@
 					archiveChatHandler={() => {
 						archiveChatHandler(id);
 					}}
-					renameHandler={() => {
+					renameHandler={async () => {
 						chatTitle = title;
-
 						confirmEdit = true;
+
+						await tick();
+						const input = document.getElementById(`chat-title-input-${id}`);
+						if (input) {
+							input.focus();
+						}
 					}}
 					deleteHandler={() => {
 						showDeleteConfirm = true;

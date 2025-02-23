@@ -212,6 +212,15 @@ class ChatTable:
 
         return chat.chat.get("history", {}).get("messages", {}) or {}
 
+    def get_message_by_id_and_message_id(
+        self, id: str, message_id: str
+    ) -> Optional[dict]:
+        chat = self.get_chat_by_id(id)
+        if chat is None:
+            return None
+
+        return chat.chat.get("history", {}).get("messages", {}).get(message_id, {})
+
     def upsert_message_to_chat_by_id_and_message_id(
         self, id: str, message_id: str, message: dict
     ) -> Optional[ChatModel]:
@@ -231,6 +240,24 @@ class ChatTable:
             history["messages"][message_id] = message
 
         history["currentId"] = message_id
+
+        chat["history"] = history
+        return self.update_chat_by_id(id, chat)
+
+    def add_message_status_to_chat_by_id_and_message_id(
+        self, id: str, message_id: str, status: dict
+    ) -> Optional[ChatModel]:
+        chat = self.get_chat_by_id(id)
+        if chat is None:
+            return None
+
+        chat = chat.chat
+        history = chat.get("history", {})
+
+        if message_id in history.get("messages", {}):
+            status_history = history["messages"][message_id].get("statusHistory", [])
+            status_history.append(status)
+            history["messages"][message_id]["statusHistory"] = status_history
 
         chat["history"] = history
         return self.update_chat_by_id(id, chat)
@@ -366,7 +393,7 @@ class ChatTable:
         limit: int = 50,
     ) -> list[ChatModel]:
         with get_db() as db:
-            query = db.query(Chat).filter_by(user_id=user_id).filter_by(folder_id=None)
+            query = db.query(Chat).filter_by(user_id=user_id)
             if not include_archived:
                 query = query.filter_by(archived=False)
 
@@ -442,6 +469,8 @@ class ChatTable:
     def get_chat_by_share_id(self, id: str) -> Optional[ChatModel]:
         try:
             with get_db() as db:
+                # it is possible that the shared link was deleted. hence,
+                # we check if the chat is still shared by checking if a chat with the share_id exists
                 chat = db.query(Chat).filter_by(share_id=id).first()
 
                 if chat:

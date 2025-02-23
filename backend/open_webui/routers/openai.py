@@ -75,9 +75,9 @@ async def cleanup_response(
         await session.close()
 
 
-def openai_o1_handler(payload):
+def openai_o1_o3_handler(payload):
     """
-    Handle O1 specific parameters
+    Handle o1, o3 specific parameters
     """
     if "max_tokens" in payload:
         # Remove "max_tokens" from the payload
@@ -145,11 +145,13 @@ async def update_config(
 
     request.app.state.config.OPENAI_API_CONFIGS = form_data.OPENAI_API_CONFIGS
 
-    # Remove any extra configs
-    config_urls = request.app.state.config.OPENAI_API_CONFIGS.keys()
-    for idx, url in enumerate(request.app.state.config.OPENAI_API_BASE_URLS):
-        if url not in config_urls:
-            request.app.state.config.OPENAI_API_CONFIGS.pop(url, None)
+    # Remove the API configs that are not in the API URLS
+    keys = list(map(str, range(len(request.app.state.config.OPENAI_API_BASE_URLS))))
+    request.app.state.config.OPENAI_API_CONFIGS = {
+        key: value
+        for key, value in request.app.state.config.OPENAI_API_CONFIGS.items()
+        if key in keys
+    }
 
     return {
         "ENABLE_OPENAI_API": request.app.state.config.ENABLE_OPENAI_API,
@@ -264,14 +266,21 @@ async def get_all_models_responses(request: Request) -> list:
 
     request_tasks = []
     for idx, url in enumerate(request.app.state.config.OPENAI_API_BASE_URLS):
-        if url not in request.app.state.config.OPENAI_API_CONFIGS:
+        if (str(idx) not in request.app.state.config.OPENAI_API_CONFIGS) and (
+            url not in request.app.state.config.OPENAI_API_CONFIGS  # Legacy support
+        ):
             request_tasks.append(
                 send_get_request(
                     f"{url}/models", request.app.state.config.OPENAI_API_KEYS[idx]
                 )
             )
         else:
-            api_config = request.app.state.config.OPENAI_API_CONFIGS.get(url, {})
+            api_config = request.app.state.config.OPENAI_API_CONFIGS.get(
+                str(idx),
+                request.app.state.config.OPENAI_API_CONFIGS.get(
+                    url, {}
+                ),  # Legacy support
+            )
 
             enable = api_config.get("enable", True)
             model_ids = api_config.get("model_ids", [])
@@ -310,7 +319,12 @@ async def get_all_models_responses(request: Request) -> list:
     for idx, response in enumerate(responses):
         if response:
             url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
-            api_config = request.app.state.config.OPENAI_API_CONFIGS.get(url, {})
+            api_config = request.app.state.config.OPENAI_API_CONFIGS.get(
+                str(idx),
+                request.app.state.config.OPENAI_API_CONFIGS.get(
+                    url, {}
+                ),  # Legacy support
+            )
 
             prefix_id = api_config.get("prefix_id", None)
 
@@ -475,7 +489,7 @@ async def get_models(
                 raise HTTPException(status_code=500, detail=error_detail)
 
     if user.role == "user" and not BYPASS_MODEL_ACCESS_CONTROL:
-        models["data"] = get_filtered_models(models, user)
+        models["data"] = await get_filtered_models(models, user)
 
     return models
 
@@ -533,10 +547,13 @@ async def generate_chat_completion(
     user=Depends(get_verified_user),
     bypass_filter: Optional[bool] = False,
 ):
+    if BYPASS_MODEL_ACCESS_CONTROL:
+        bypass_filter = True
+
     idx = 0
+
     payload = {**form_data}
-    if "metadata" in payload:
-        del payload["metadata"]
+    metadata = payload.pop("metadata", None)
 
     model_id = form_data.get("model")
     model_info = Models.get_model_by_id(model_id)
@@ -545,10 +562,11 @@ async def generate_chat_completion(
     if model_info:
         if model_info.base_model_id:
             payload["model"] = model_info.base_model_id
+            model_id = model_info.base_model_id
 
         params = model_info.params.model_dump()
         payload = apply_model_params_to_body_openai(params, payload)
-        payload = apply_model_system_prompt_to_body(params, payload, user)
+        payload = apply_model_system_prompt_to_body(params, payload, metadata, user)
 
         # Check if user has access to the model
         if not bypass_filter and user.role == "user":
@@ -569,6 +587,7 @@ async def generate_chat_completion(
                 detail="Model not found",
             )
 
+    await get_all_models(request)
     model = request.app.state.OPENAI_MODELS.get(model_id)
     if model:
         idx = model["urlIdx"]
@@ -580,7 +599,10 @@ async def generate_chat_completion(
 
     # Get the API config for the model
     api_config = request.app.state.config.OPENAI_API_CONFIGS.get(
-        request.app.state.config.OPENAI_API_BASE_URLS[idx], {}
+        str(idx),
+        request.app.state.config.OPENAI_API_CONFIGS.get(
+            request.app.state.config.OPENAI_API_BASE_URLS[idx], {}
+        ),  # Legacy support
     )
 
     prefix_id = api_config.get("prefix_id", None)
@@ -599,19 +621,18 @@ async def generate_chat_completion(
     url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
     key = request.app.state.config.OPENAI_API_KEYS[idx]
 
-    # Fix: O1 does not support the "max_tokens" parameter, Modify "max_tokens" to "max_completion_tokens"
-    is_o1 = payload["model"].lower().startswith("o1-")
-    if is_o1:
-        payload = openai_o1_handler(payload)
+    # Fix: o1,o3 does not support the "max_tokens" parameter, Modify "max_tokens" to "max_completion_tokens"
+    is_o1_o3 = payload["model"].lower().startswith(("o1", "o3-"))
+    if is_o1_o3:
+        payload = openai_o1_o3_handler(payload)
     elif "api.openai.com" not in url:
         # Remove "max_completion_tokens" from the payload for backward compatibility
         if "max_completion_tokens" in payload:
             payload["max_tokens"] = payload["max_completion_tokens"]
             del payload["max_completion_tokens"]
 
-    # TODO: check if below is needed
-    # if "max_tokens" in payload and "max_completion_tokens" in payload:
-    #     del payload["max_tokens"]
+    if "max_tokens" in payload and "max_completion_tokens" in payload:
+        del payload["max_tokens"]
 
     # Convert the modified body back to JSON
     payload = json.dumps(payload)

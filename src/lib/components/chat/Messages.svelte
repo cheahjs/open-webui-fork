@@ -1,6 +1,14 @@
 <script lang="ts">
 	import { v4 as uuidv4 } from 'uuid';
-	import { chats, config, settings, user as _user, mobile, currentChatPage } from '$lib/stores';
+	import {
+		chats,
+		config,
+		settings,
+		user as _user,
+		mobile,
+		currentChatPage,
+		temporaryChatEnabled
+	} from '$lib/stores';
 	import { tick, getContext, onMount, createEventDispatcher } from 'svelte';
 	const dispatch = createEventDispatcher();
 
@@ -16,12 +24,15 @@
 
 	const i18n = getContext('i18n');
 
+	export let className = 'h-full flex pt-8';
+
 	export let chatId = '';
 	export let user = $_user;
 
 	export let prompt;
 	export let history = {};
 	export let selectedModels;
+	export let atSelectedModel;
 
 	let messages = [];
 
@@ -33,6 +44,7 @@
 	export let chatActionHandler: Function;
 	export let showMessage: Function = () => {};
 	export let submitMessage: Function = () => {};
+	export let addMessages: Function = () => {};
 
 	export let readOnly = false;
 
@@ -82,15 +94,17 @@
 	};
 
 	const updateChat = async () => {
-		history = history;
-		await tick();
-		await updateChatById(localStorage.token, chatId, {
-			history: history,
-			messages: messages
-		});
+		if (!$temporaryChatEnabled) {
+			history = history;
+			await tick();
+			await updateChatById(localStorage.token, chatId, {
+				history: history,
+				messages: messages
+			});
 
-		currentChatPage.set(1);
-		await chats.set(await getChatList(localStorage.token, $currentChatPage));
+			currentChatPage.set(1);
+			await chats.set(await getChatList(localStorage.token, $currentChatPage));
+		}
 	};
 
 	const showPreviousMessage = async (message) => {
@@ -230,7 +244,7 @@
 				history.currentId = userMessageId;
 
 				await tick();
-				await sendPrompt(userPrompt, userMessageId);
+				await sendPrompt(history, userPrompt, userMessageId);
 			} else {
 				// Edit user message
 				history.messages[messageId].content = content;
@@ -332,10 +346,11 @@
 	};
 </script>
 
-<div class="h-full flex pt-8">
+<div class={className}>
 	{#if Object.keys(history?.messages ?? {}).length == 0}
 		<ChatPlaceholder
 			modelIds={selectedModels}
+			atSelectedModel={atSelectedModel}
 			submitPrompt={async (p) => {
 				let text = p;
 
@@ -404,6 +419,7 @@
 							{regenerateResponse}
 							{continueResponse}
 							{mergeResponses}
+							{addMessages}
 							{triggerScroll}
 							{readOnly}
 						/>

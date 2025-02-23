@@ -10,6 +10,9 @@ from open_webui.models.users import (
     UserSettings,
     UserUpdateForm,
 )
+
+
+from open_webui.socket.main import get_active_status_by_user_id
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -27,7 +30,11 @@ router = APIRouter()
 
 
 @router.get("/", response_model=list[UserModel])
-async def get_users(skip: int = 0, limit: int = 50, user=Depends(get_admin_user)):
+async def get_users(
+    skip: Optional[int] = None,
+    limit: Optional[int] = None,
+    user=Depends(get_admin_user),
+):
     return Users.get_users(skip, limit)
 
 
@@ -55,27 +62,45 @@ async def get_user_permissisions(user=Depends(get_verified_user)):
 # User Default Permissions
 ############################
 class WorkspacePermissions(BaseModel):
-    models: bool
-    knowledge: bool
-    prompts: bool
-    tools: bool
+    models: bool = False
+    knowledge: bool = False
+    prompts: bool = False
+    tools: bool = False
 
 
 class ChatPermissions(BaseModel):
-    file_upload: bool
-    delete: bool
-    edit: bool
-    temporary: bool
+    controls: bool = True
+    file_upload: bool = True
+    delete: bool = True
+    edit: bool = True
+    temporary: bool = True
+
+
+class FeaturesPermissions(BaseModel):
+    web_search: bool = True
+    image_generation: bool = True
+    code_interpreter: bool = True
 
 
 class UserPermissions(BaseModel):
     workspace: WorkspacePermissions
     chat: ChatPermissions
+    features: FeaturesPermissions
 
 
-@router.get("/default/permissions")
+@router.get("/default/permissions", response_model=UserPermissions)
 async def get_user_permissions(request: Request, user=Depends(get_admin_user)):
-    return request.app.state.config.USER_PERMISSIONS
+    return {
+        "workspace": WorkspacePermissions(
+            **request.app.state.config.USER_PERMISSIONS.get("workspace", {})
+        ),
+        "chat": ChatPermissions(
+            **request.app.state.config.USER_PERMISSIONS.get("chat", {})
+        ),
+        "features": FeaturesPermissions(
+            **request.app.state.config.USER_PERMISSIONS.get("features", {})
+        ),
+    }
 
 
 @router.post("/default/permissions")
@@ -128,7 +153,7 @@ async def get_user_settings_by_session_user(user=Depends(get_verified_user)):
 async def update_user_settings_by_session_user(
     form_data: UserSettings, user=Depends(get_verified_user)
 ):
-    user = Users.update_user_by_id(user.id, {"settings": form_data.model_dump()})
+    user = Users.update_user_settings_by_id(user.id, form_data.model_dump())
     if user:
         return user.settings
     else:
@@ -192,6 +217,7 @@ async def update_user_info_by_session_user(
 class UserResponse(BaseModel):
     name: str
     profile_image_url: str
+    active: Optional[bool] = None
 
 
 @router.get("/{user_id}", response_model=UserResponse)
@@ -212,7 +238,13 @@ async def get_user_by_id(user_id: str, user=Depends(get_verified_user)):
     user = Users.get_user_by_id(user_id)
 
     if user:
-        return UserResponse(name=user.name, profile_image_url=user.profile_image_url)
+        return UserResponse(
+            **{
+                "name": user.name,
+                "profile_image_url": user.profile_image_url,
+                "active": get_active_status_by_user_id(user_id),
+            }
+        )
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
