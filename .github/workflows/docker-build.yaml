@@ -315,7 +315,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-main-image]
     outputs:
-      IMAGE_NAME: ${{ steps.output-image-name.outputs.IMAGE_NAME }}
+      image_tag: ${{ steps.output-image-name.outputs.image_tag }}
     steps:
       # GitHub Packages requires the entire repository name to be in lowercase
       # although the repository owner has a lowercase username, this prevents some people from running actions after forking
@@ -368,13 +368,14 @@ jobs:
           docker buildx imagetools inspect ${{ env.FULL_IMAGE_NAME }}:${{ steps.meta.outputs.version }}
 
       - name: Output image name
-        run: echo "IMAGE_NAME=${{ env.FULL_IMAGE_NAME }}" >> $GITHUB_OUTPUT
+        id: output-image-name
+        run: echo "image_tag=${{ env.FULL_IMAGE_NAME }}" >> $GITHUB_OUTPUT
 
   trigger-hf-space-deploy:
     needs: [merge-main-images]
     uses: ./.github/workflows/deploy-to-hf-spaces.yml
     with:
-      image-name: ${{ needs.merge-main-images.outputs.IMAGE_NAME }}
+      image-name: ${{ needs.merge-main-images.outputs.image_tag }}
     secrets: inherit
 
   merge-cuda-images:
