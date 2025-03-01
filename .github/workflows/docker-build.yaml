@@ -371,7 +371,7 @@ jobs:
         id: output-image-name
         run: |
             export IMAGE_SHA=$(docker buildx imagetools inspect "${{ env.FULL_IMAGE_NAME }}:${{ steps.meta.outputs.version }}" --format "{{json .}}" | jq -r '.manifest.digest')
-            export IMAGE_TAG="${{ env.FULL_IMAGE_NAME }}:$IMAGE_SHA"
+            export IMAGE_TAG="${{ env.FULL_IMAGE_NAME }}@$IMAGE_SHA"
             echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
   trigger-hf-space-deploy:
