@@ -369,7 +369,7 @@ jobs:
 
       - name: Output image name
         id: output-image-name
-        run: echo "image_tag=${{ env.FULL_IMAGE_NAME }}" >> $GITHUB_OUTPUT
+        run: echo "image_tag=${{ env.FULL_IMAGE_NAME }}:${{ steps.meta.outputs.version }}" >> $GITHUB_OUTPUT
 
   trigger-hf-space-deploy:
     needs: [merge-main-images]
