@@ -45,12 +45,6 @@ fi
 if [ -n "$SPACE_ID" ]; then
   echo "Configuring for HuggingFace Space deployment"
   
-  # Ensure DATABASE_URL is set properly for HuggingFace Space
-  if [ -z "$DATABASE_URL" ]; then
-    export DATABASE_URL="sqlite:///tmp/webui.db"
-    echo "Setting DATABASE_URL to $DATABASE_URL"
-  fi
-  
   if [ -n "$ADMIN_USER_EMAIL" ] && [ -n "$ADMIN_USER_PASSWORD" ]; then
     echo "Admin user configured, creating"
     WEBUI_SECRET_KEY="$WEBUI_SECRET_KEY" uvicorn open_webui.main:app --host 127.0.0.1 --port "$PORT" --forwarded-allow-ips '*' &
