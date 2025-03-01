@@ -365,6 +365,16 @@ jobs:
         run: |
           docker buildx imagetools inspect ${{ env.FULL_IMAGE_NAME }}:${{ steps.meta.outputs.version }}
 
+      - name: Output image name
+        run: echo "IMAGE_NAME=${{ env.FULL_IMAGE_NAME }}" >> $GITHUB_OUTPUT
+
+  trigger-hf-space-deploy:
+    needs: [merge-main-images]
+    uses: ./.github/workflows/deploy-to-hf-spaces.yml
+    with:
+      image-name: ${{ needs.merge-main-images.outputs.IMAGE_NAME }}
+    secrets: inherit
+
   merge-cuda-images:
     runs-on: ubuntu-latest
     needs: [build-cuda-image]
