@@ -314,6 +314,8 @@ jobs:
   merge-main-images:
     runs-on: ubuntu-latest
     needs: [build-main-image]
+    outputs:
+      IMAGE_NAME: ${{ steps.output-image-name.outputs.IMAGE_NAME }}
     steps:
       # GitHub Packages requires the entire repository name to be in lowercase
       # although the repository owner has a lowercase username, this prevents some people from running actions after forking
