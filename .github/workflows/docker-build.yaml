@@ -316,7 +316,6 @@ jobs:
     needs: [build-main-image]
     outputs:
       image_tag: ${{ steps.output-image-name.outputs.image_tag }}
-      image_sha: ${{ steps.output-image-name.outputs.image_sha }}
     steps:
       # GitHub Packages requires the entire repository name to be in lowercase
       # although the repository owner has a lowercase username, this prevents some people from running actions after forking
@@ -371,14 +370,15 @@ jobs:
       - name: Output image name
         id: output-image-name
         run: |
-          echo "image_tag=${{ env.FULL_IMAGE_NAME }}:${{ steps.meta.outputs.version }}" >> $GITHUB_OUTPUT
-          echo "image_sha=${{ steps.meta.outputs.digest }}" >> $GITHUB_OUTPUT
+            export IMAGE_SHA=$(docker buildx imagetools inspect "${{ env.FULL_IMAGE_NAME }}:${{ steps.meta.outputs.version }}" --format "{{json .}}" | jq -r '.manifest.digest')
+            export IMAGE_TAG="${{ env.FULL_IMAGE_NAME }}:$IMAGE_SHA"
+            echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
   trigger-hf-space-deploy:
     needs: [merge-main-images]
     uses: ./.github/workflows/deploy-to-hf-spaces.yml
     with:
-      image-name: ${{ needs.merge-main-images.outputs.image_tag }}:{{{ needs.merge-main-images.outputs.image_sha }}
+      image-name: ${{ needs.merge-main-images.outputs.image_tag }}
     secrets: inherit
 
   merge-cuda-images:
