@@ -96,6 +96,8 @@ jobs:
           cache-to: type=registry,ref=${{ steps.cache-meta.outputs.tags }},mode=max
           build-args: |
             BUILD_HASH=${{ github.sha }}
+            UID=1000
+            GID=1000
 
       - name: Export digest
         run: |
