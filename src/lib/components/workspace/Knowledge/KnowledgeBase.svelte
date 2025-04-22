@@ -9,9 +9,9 @@
 
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { mobile, showSidebar, knowledge as _knowledge } from '$lib/stores';
+	import { mobile, showSidebar, knowledge as _knowledge, config, user } from '$lib/stores';
 
-	import { updateFileDataContentById, uploadFile, deleteFileById } from '$lib/apis/files';
+	import { updateFileDataContentById, uploadFile, deleteFileById, getFileById } from '$lib/apis/files';
 	import {
 		addFileToKnowledgeById,
 		getKnowledgeById,
@@ -84,12 +84,15 @@
 
 	let selectedFile = null;
 	let selectedFileId = null;
+	let selectedFileContent = '';
+
+	// Add cache object
+	let fileContentCache = new Map();
 
 	$: if (selectedFileId) {
 		const file = (knowledge?.files ?? []).find((file) => file.id === selectedFileId);
 		if (file) {
-			file.data = file.data ?? { content: '' };
-			selectedFile = file;
+			fileSelectHandler(file);
 		} else {
 			selectedFile = null;
 		}
@@ -129,6 +132,22 @@
 		if (fileItem.size == 0) {
 			toast.error($i18n.t('You cannot upload an empty file.'));
 			return null;
+		}
+
+		if (
+			($config?.file?.max_size ?? null) !== null &&
+			file.size > ($config?.file?.max_size ?? 0) * 1024 * 1024
+		) {
+			console.log('File exceeds max size limit:', {
+				fileSize: file.size,
+				maxSize: ($config?.file?.max_size ?? 0) * 1024 * 1024
+			});
+			toast.error(
+				$i18n.t(`File size should not exceed {{maxSize}} MB.`, {
+					maxSize: $config?.file?.max_size
+				})
+			);
+			return;
 		}
 
 		knowledge.files = [...(knowledge.files ?? []), fileItem];
@@ -378,7 +397,10 @@
 
 	const updateFileContentHandler = async () => {
 		const fileId = selectedFile.id;
-		const content = selectedFile.data.content;
+		const content = selectedFileContent;
+
+		// Clear the cache for this file since we're updating it
+		fileContentCache.delete(fileId);
 
 		const res = updateFileDataContentById(localStorage.token, fileId, content).catch((e) => {
 			toast.error(`${e}`);
@@ -433,6 +455,29 @@
 			largeScreen = false;
 		}
 	};
+
+	const fileSelectHandler = async (file) => {
+		try {
+			selectedFile = file;
+			
+			// Check cache first
+			if (fileContentCache.has(file.id)) {
+				selectedFileContent = fileContentCache.get(file.id);
+				return;
+			}
+
+			const response = await getFileById(localStorage.token, file.id);
+			if (response) {
+				selectedFileContent = response.data.content;
+				// Cache the content
+				fileContentCache.set(file.id, response.data.content);
+			} else {
+				toast.error($i18n.t('No content found in file.'));
+			}
+		} catch (e) {
+			toast.error($i18n.t('Failed to load file content.'));
+		}
+	};  
 
 	const onDragOver = (e) => {
 		e.preventDefault();
@@ -531,6 +576,14 @@
 		dropZone?.removeEventListener('drop', onDrop);
 		dropZone?.removeEventListener('dragleave', onDragLeave);
 	});
+
+	const decodeString = (str: string) => {
+		try {
+			return decodeURIComponent(str);
+		} catch (e) {
+			return str;
+		}
+	};
 </script>
 
 {#if dragged}
@@ -603,6 +656,7 @@
 		<AccessControlModal
 			bind:show={showAccessControlModal}
 			bind:accessControl={knowledge.access_control}
+			allowPublic={$user?.permissions?.sharing?.public_knowledge || $user?.role === 'admin'}
 			onChange={() => {
 				changeDebounceHandler();
 			}}
@@ -681,7 +735,7 @@
 										href={selectedFile.id ? `/api/v1/files/${selectedFile.id}/content` : '#'}
 										target="_blank"
 									>
-										{selectedFile?.meta?.name}
+										{decodeString(selectedFile?.meta?.name)}
 									</a>
 								</div>
 
@@ -703,7 +757,7 @@
 								{#key selectedFile.id}
 									<RichTextInput
 										className="input-prose-sm"
-										bind:value={selectedFile.data.content}
+										bind:value={selectedFileContent}
 										placeholder={$i18n.t('Add content here')}
 										preserveBreaks={true}
 									/>
@@ -722,7 +776,7 @@
 				<Drawer
 					className="h-full"
 					show={selectedFileId !== null}
-					on:close={() => {
+					onClose={() => {
 						selectedFileId = null;
 					}}
 				>
@@ -761,7 +815,7 @@
 								{#key selectedFile.id}
 									<RichTextInput
 										className="input-prose-sm"
-										bind:value={selectedFile.data.content}
+										bind:value={selectedFileContent}
 										placeholder={$i18n.t('Add content here')}
 										preserveBreaks={true}
 									/>

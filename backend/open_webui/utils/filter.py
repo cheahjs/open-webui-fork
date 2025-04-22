@@ -12,9 +12,9 @@ log.setLevel(SRC_LOG_LEVELS["MAIN"])
 def get_sorted_filter_ids(model: dict):
     def get_priority(function_id):
         function = Functions.get_function_by_id(function_id)
-        if function is not None and hasattr(function, "valves"):
-            # TODO: Fix FunctionModel to include vavles
-            return (function.valves if function.valves else {}).get("priority", 0)
+        if function is not None:
+            valves = Functions.get_function_valves_by_id(function_id)
+            return valves.get("priority", 0) if valves else 0
         return 0
 
     filter_ids = [function.id for function in Functions.get_global_filter_functions()]
@@ -33,12 +33,13 @@ def get_sorted_filter_ids(model: dict):
 
 
 async def process_filter_functions(
-    request, filter_ids, filter_type, form_data, extra_params
+    request, filter_functions, filter_type, form_data, extra_params
 ):
     skip_files = None
 
-    for filter_id in filter_ids:
-        filter = Functions.get_function_by_id(filter_id)
+    for function in filter_functions:
+        filter = function
+        filter_id = function.id
         if not filter:
             continue
 
@@ -47,6 +48,11 @@ async def process_filter_functions(
         else:
             function_module, _, _ = load_function_module_by_id(filter_id)
             request.app.state.FUNCTIONS[filter_id] = function_module
+
+        # Prepare handler function
+        handler = getattr(function_module, filter_type, None)
+        if not handler:
+            continue
 
         # Check if the function has a file_handler variable
         if filter_type == "inlet" and hasattr(function_module, "file_handler"):
@@ -58,11 +64,6 @@ async def process_filter_functions(
             function_module.valves = function_module.Valves(
                 **(valves if valves else {})
             )
-
-        # Prepare handler function
-        handler = getattr(function_module, filter_type, None)
-        if not handler:
-            continue
 
         try:
             # Prepare parameters
@@ -100,11 +101,12 @@ async def process_filter_functions(
                 form_data = handler(**params)
 
         except Exception as e:
-            log.exception(f"Error in {filter_type} handler {filter_id}: {e}")
+            log.debug(f"Error in {filter_type} handler {filter_id}: {e}")
             raise e
 
     # Handle file cleanup for inlet
     if skip_files and "files" in form_data.get("metadata", {}):
+        del form_data["files"]
         del form_data["metadata"]["files"]
 
     return form_data, {}

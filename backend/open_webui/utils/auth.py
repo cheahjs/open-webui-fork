@@ -8,7 +8,9 @@ import requests
 import os
 
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
+import pytz
+from pytz import UTC
 from typing import Optional, Union, List, Dict
 
 from open_webui.models.users import Users
@@ -72,7 +74,7 @@ def get_license_data(app, key):
     if key:
         try:
             res = requests.post(
-                "https://api.openwebui.com/api/v1/license",
+                "https://api.openwebui.com/api/v1/license/",
                 json={"key": key, "version": "1"},
                 timeout=5,
             )
@@ -83,11 +85,12 @@ def get_license_data(app, key):
                     if k == "resources":
                         for p, c in v.items():
                             globals().get("override_static", lambda a, b: None)(p, c)
-                    elif k == "user_count":
+                    elif k == "count":
                         setattr(app.state, "USER_COUNT", v)
-                    elif k == "webui_name":
+                    elif k == "name":
                         setattr(app.state, "WEBUI_NAME", v)
-
+                    elif k == "metadata":
+                        setattr(app.state, "LICENSE_METADATA", v)
                 return True
             else:
                 log.error(
@@ -140,12 +143,14 @@ def create_api_key():
     return f"sk-{key}"
 
 
-def get_http_authorization_cred(auth_header: str):
+def get_http_authorization_cred(auth_header: Optional[str]):
+    if not auth_header:
+        return None
     try:
         scheme, credentials = auth_header.split(" ")
         return HTTPAuthorizationCredentials(scheme=scheme, credentials=credentials)
     except Exception:
-        raise ValueError(ERROR_MESSAGES.INVALID_TOKEN)
+        return None
 
 
 def get_current_user(
@@ -179,7 +184,12 @@ def get_current_user(
                 ).split(",")
             ]
 
-            if request.url.path not in allowed_paths:
+            # Check if the request path matches any allowed endpoint.
+            if not any(
+                request.url.path == allowed
+                or request.url.path.startswith(allowed + "/")
+                for allowed in allowed_paths
+            ):
                 raise HTTPException(
                     status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.API_KEY_NOT_ALLOWED
                 )
