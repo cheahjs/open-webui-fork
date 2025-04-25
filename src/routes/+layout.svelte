@@ -34,7 +34,7 @@
 	import { Toaster, toast } from 'svelte-sonner';
 
 	import { executeToolServer, getBackendConfig } from '$lib/apis';
-	import { getSessionUser } from '$lib/apis/auths';
+	import { getSessionUser, userSignOut } from '$lib/apis/auths';
 
 	import '../tailwind.css';
 	import '../app.css';
@@ -54,6 +54,7 @@
 	const bc = new BroadcastChannel('active-tab-channel');
 
 	let loaded = false;
+	let tokenTimer = null;
 
 	const BREAKPOINT = 768;
 
@@ -443,6 +444,24 @@
 		}
 	};
 
+	const checkTokenExpiry = async () => {
+		const exp = $user?.expires_at; // token expiry time in unix timestamp
+		const now = Math.floor(Date.now() / 1000); // current time in unix timestamp
+
+		if (!exp) {
+			// If no expiry time is set, do nothing
+			return;
+		}
+
+		if (now >= exp) {
+			await userSignOut();
+			user.set(null);
+
+			localStorage.removeItem('token');
+			location.href = '/auth';
+		}
+	};
+
 	onMount(async () => {
 		if (typeof window !== 'undefined' && window.applyTheme) {
 			window.applyTheme();
@@ -560,6 +579,12 @@
 
 						await user.set(sessionUser);
 						await config.set(await getBackendConfig());
+
+						// Set up the token expiry check
+						if (tokenTimer) {
+							clearInterval(tokenTimer);
+						}
+						tokenTimer = setInterval(checkTokenExpiry, 1000);
 					} else {
 						// Redirect Invalid Session User to /auth Page
 						localStorage.removeItem('token');
