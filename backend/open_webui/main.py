@@ -155,6 +155,8 @@ from open_webui.config import (
     AUDIO_STT_AZURE_API_KEY,
     AUDIO_STT_AZURE_REGION,
     AUDIO_STT_AZURE_LOCALES,
+    AUDIO_STT_AZURE_BASE_URL,
+    AUDIO_STT_AZURE_MAX_SPEAKERS,
     AUDIO_TTS_API_KEY,
     AUDIO_TTS_ENGINE,
     AUDIO_TTS_MODEL,
@@ -171,6 +173,7 @@ from open_webui.config import (
     WEB_LOADER_ENGINE,
     WHISPER_MODEL,
     WHISPER_VAD_FILTER,
+    WHISPER_LANGUAGE,
     DEEPGRAM_API_KEY,
     WHISPER_MODEL_AUTO_UPDATE,
     WHISPER_MODEL_DIR,
@@ -223,6 +226,9 @@ from open_webui.config import (
     SERPAPI_API_KEY,
     SERPAPI_ENGINE,
     SEARXNG_QUERY_URL,
+    YACY_QUERY_URL,
+    YACY_USERNAME,
+    YACY_PASSWORD,
     SERPER_API_KEY,
     SERPLY_API_KEY,
     SERPSTACK_API_KEY,
@@ -269,6 +275,7 @@ from open_webui.config import (
     ENABLE_API_KEY_ENDPOINT_RESTRICTIONS,
     API_KEY_ALLOWED_ENDPOINTS,
     ENABLE_CHANNELS,
+    ENABLE_NOTES,
     ENABLE_COMMUNITY_SHARING,
     ENABLE_MESSAGE_RATING,
     ENABLE_USER_WEBHOOKS,
@@ -380,6 +387,7 @@ from open_webui.utils.auth import (
     get_admin_user,
     get_verified_user,
 )
+from open_webui.utils.plugin import install_tool_and_function_dependencies
 from open_webui.utils.oauth import OAuthManager
 from open_webui.utils.security_headers import SecurityHeadersMiddleware
 
@@ -442,12 +450,18 @@ async def lifespan(app: FastAPI):
     if LICENSE_KEY:
         get_license_data(app, LICENSE_KEY)
 
+    # This should be blocking (sync) so functions are not deactivated on first /get_models calls
+    # when the first user lands on the / route.
+    log.info("Installing external dependencies of functions and tools...")
+    install_tool_and_function_dependencies()
+
     pool_size = THREAD_POOL_SIZE
     if pool_size and pool_size > 0:
         limiter = anyio.to_thread.current_default_thread_limiter()
         limiter.total_tokens = pool_size
 
     asyncio.create_task(periodic_usage_pool_cleanup())
+
     yield
 
 
@@ -558,6 +572,7 @@ app.state.config.MODEL_ORDER_LIST = MODEL_ORDER_LIST
 
 
 app.state.config.ENABLE_CHANNELS = ENABLE_CHANNELS
+app.state.config.ENABLE_NOTES = ENABLE_NOTES
 app.state.config.ENABLE_COMMUNITY_SHARING = ENABLE_COMMUNITY_SHARING
 app.state.config.ENABLE_MESSAGE_RATING = ENABLE_MESSAGE_RATING
 app.state.config.ENABLE_USER_WEBHOOKS = ENABLE_USER_WEBHOOKS
@@ -662,6 +677,9 @@ app.state.config.BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL = (
 app.state.config.ENABLE_GOOGLE_DRIVE_INTEGRATION = ENABLE_GOOGLE_DRIVE_INTEGRATION
 app.state.config.ENABLE_ONEDRIVE_INTEGRATION = ENABLE_ONEDRIVE_INTEGRATION
 app.state.config.SEARXNG_QUERY_URL = SEARXNG_QUERY_URL
+app.state.config.YACY_QUERY_URL = YACY_QUERY_URL
+app.state.config.YACY_USERNAME = YACY_USERNAME
+app.state.config.YACY_PASSWORD = YACY_PASSWORD
 app.state.config.GOOGLE_PSE_API_KEY = GOOGLE_PSE_API_KEY
 app.state.config.GOOGLE_PSE_ENGINE_ID = GOOGLE_PSE_ENGINE_ID
 app.state.config.BRAVE_SEARCH_API_KEY = BRAVE_SEARCH_API_KEY
@@ -816,6 +834,8 @@ app.state.config.DEEPGRAM_API_KEY = DEEPGRAM_API_KEY
 app.state.config.AUDIO_STT_AZURE_API_KEY = AUDIO_STT_AZURE_API_KEY
 app.state.config.AUDIO_STT_AZURE_REGION = AUDIO_STT_AZURE_REGION
 app.state.config.AUDIO_STT_AZURE_LOCALES = AUDIO_STT_AZURE_LOCALES
+app.state.config.AUDIO_STT_AZURE_BASE_URL = AUDIO_STT_AZURE_BASE_URL
+app.state.config.AUDIO_STT_AZURE_MAX_SPEAKERS = AUDIO_STT_AZURE_MAX_SPEAKERS
 
 app.state.config.TTS_OPENAI_API_BASE_URL = AUDIO_TTS_OPENAI_API_BASE_URL
 app.state.config.TTS_OPENAI_API_KEY = AUDIO_TTS_OPENAI_API_KEY
@@ -889,7 +909,8 @@ class RedirectMiddleware(BaseHTTPMiddleware):
 
             # Check for the specific watch path and the presence of 'v' parameter
             if path.endswith("/watch") and "v" in query_params:
-                video_id = query_params["v"][0]  # Extract the first 'v' parameter
+                # Extract the first 'v' parameter
+                video_id = query_params["v"][0]
                 encoded_video_id = urlencode({"youtube": video_id})
                 redirect_url = f"/?{encoded_video_id}"
                 return RedirectResponse(url=redirect_url)
@@ -1303,6 +1324,7 @@ async def get_app_config(request: Request):
                 {
                     "enable_direct_connections": app.state.config.ENABLE_DIRECT_CONNECTIONS,
                     "enable_channels": app.state.config.ENABLE_CHANNELS,
+                    "enable_notes": app.state.config.ENABLE_NOTES,
                     "enable_web_search": app.state.config.ENABLE_WEB_SEARCH,
                     "enable_code_execution": app.state.config.ENABLE_CODE_EXECUTION,
                     "enable_code_interpreter": app.state.config.ENABLE_CODE_INTERPRETER,
